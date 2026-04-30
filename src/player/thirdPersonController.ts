@@ -40,8 +40,8 @@ export class ThirdPersonController {
   private isLocked = false;
   private readonly playerRadius = 2.1;
   private readonly speed = 18;
-  private readonly cameraDistance = 13;
-  private readonly cameraHeight = 6;
+  private readonly cameraDistance = 17;
+  private readonly cameraHeight = 8.6;
 
   constructor(options: ThirdPersonControllerOptions) {
     this.camera = options.camera;
@@ -78,7 +78,7 @@ export class ThirdPersonController {
     if (isMoving) {
       this.movement.set(strafe, 0, -forward).normalize();
       this.movement.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
-      this.character.rotation.y = Math.atan2(this.movement.x, this.movement.z);
+      this.character.rotation.y = Math.atan2(this.movement.x, this.movement.z) + Math.PI;
       this.movement.multiplyScalar(this.speed * deltaSeconds);
     }
 
@@ -170,7 +170,7 @@ export class ThirdPersonController {
     this.camera.position.lerp(this.targetCameraPosition, smoothing);
 
     this.lookTarget.copy(this.character.position);
-    this.lookTarget.y += 3.2;
+    this.lookTarget.y += 4.6;
     this.camera.lookAt(this.lookTarget);
   }
 
