@@ -10,32 +10,6 @@ interface LoadedAsset {
 }
 
 const loadingManager = new THREE.LoadingManager();
-class CityPaletteTextureLoader extends THREE.Loader<THREE.DataTexture> {
-  load(
-    _url: string,
-    onLoad?: (texture: THREE.DataTexture) => void,
-    _onProgress?: (event: ProgressEvent) => void,
-    _onError?: (error: unknown) => void,
-  ): THREE.DataTexture {
-    const texture = new THREE.DataTexture(
-      new Uint8Array([
-        242, 238, 226, 255,
-        143, 161, 173, 255,
-        83, 95, 103, 255,
-        174, 148, 97, 255,
-      ]),
-      2,
-      2,
-      THREE.RGBAFormat,
-    );
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.needsUpdate = true;
-    queueMicrotask(() => onLoad?.(texture));
-    return texture;
-  }
-}
-
-loadingManager.addHandler(/colormap\.png$/i, new CityPaletteTextureLoader(loadingManager));
 loadingManager.setURLModifier((url) => {
   if (url.endsWith("Textures/colormap.png")) {
     return "/assets/city/Textures/colormap.png";
