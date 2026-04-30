@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { WalkController } from "../player/walkController";
+import { ThirdPersonController } from "../player/thirdPersonController";
 import type { HudController } from "../ui/hud";
 import { buildingColliders, cityBounds } from "../world/cityLayout";
 import { createCity } from "../world/createCity";
@@ -11,7 +11,7 @@ export class CitySandboxApp {
   private readonly camera = new THREE.PerspectiveCamera(68, 1, 0.1, 700);
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   private readonly clock = new THREE.Clock();
-  private controller?: WalkController;
+  private controller?: ThirdPersonController;
   private animationId = 0;
 
   constructor(root: HTMLElement, hud: HudController) {
@@ -30,8 +30,9 @@ export class CitySandboxApp {
 
     await createCity(this.scene, this.renderer);
 
-    this.controller = new WalkController({
+    this.controller = new ThirdPersonController({
       camera: this.camera,
+      scene: this.scene,
       domElement: this.renderer.domElement,
       lockElement: this.hud.lockButton,
       bounds: cityBounds,
@@ -39,7 +40,7 @@ export class CitySandboxApp {
       onLockChange: (isLocked) => this.hud.setLocked(isLocked),
     });
 
-    this.hud.setMessage("WASD to move. Mouse to look. Esc unlocks.");
+    this.hud.setMessage("WASD moves the character. Mouse rotates the chase camera. Esc unlocks.");
     this.animate();
   }
 

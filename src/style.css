@@ -70,7 +70,7 @@ canvas {
   left: 50%;
   bottom: 28px;
   transform: translateX(-50%);
-  max-width: min(420px, calc(100vw - 32px));
+  max-width: min(470px, calc(100vw - 32px));
   padding: 10px 14px;
   border: 1px solid rgb(255 255 255 / 0.18);
   border-radius: 8px;

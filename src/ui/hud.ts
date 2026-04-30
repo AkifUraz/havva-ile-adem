@@ -28,7 +28,7 @@ export function createHud(root: HTMLElement): HudController {
   const lockButton = document.createElement("button");
   lockButton.className = "hud__lock";
   lockButton.type = "button";
-  lockButton.textContent = "Click to walk the city. WASD moves, mouse looks, Esc releases.";
+  lockButton.textContent = "Click to guide the character. WASD moves, mouse rotates camera, Esc releases.";
 
   status.append(title, position, message);
   element.append(status, lockButton);

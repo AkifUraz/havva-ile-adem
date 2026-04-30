@@ -2,7 +2,9 @@ node_modules/
 dist/
 .vite/
 .superpowers/
+.tmp-karakter/
 qa/
+public/assets/city/character-a.glb
 public/Textures/
 *.log
 *.local
