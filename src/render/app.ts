@@ -1,0 +1,99 @@
+import * as THREE from "three";
+import { WalkController } from "../player/walkController";
+import type { HudController } from "../ui/hud";
+import { buildingColliders, cityBounds } from "../world/cityLayout";
+import { createCity } from "../world/createCity";
+
+export class CitySandboxApp {
+  private readonly root: HTMLElement;
+  private readonly hud: HudController;
+  private readonly scene = new THREE.Scene();
+  private readonly camera = new THREE.PerspectiveCamera(68, 1, 0.1, 700);
+  private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  private readonly clock = new THREE.Clock();
+  private controller?: WalkController;
+  private animationId = 0;
+
+  constructor(root: HTMLElement, hud: HudController) {
+    this.root = root;
+    this.hud = hud;
+  }
+
+  async start(): Promise<void> {
+    this.configureRenderer();
+    this.configureScene();
+    this.root.appendChild(this.renderer.domElement);
+    this.resize();
+
+    window.addEventListener("resize", this.resize);
+    window.addEventListener("beforeunload", this.dispose);
+
+    await createCity(this.scene, this.renderer);
+
+    this.controller = new WalkController({
+      camera: this.camera,
+      domElement: this.renderer.domElement,
+      lockElement: this.hud.lockButton,
+      bounds: cityBounds,
+      colliders: buildingColliders,
+      onLockChange: (isLocked) => this.hud.setLocked(isLocked),
+    });
+
+    this.hud.setMessage("WASD to move. Mouse to look. Esc unlocks.");
+    this.animate();
+  }
+
+  private configureRenderer(): void {
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.08;
+  }
+
+  private configureScene(): void {
+    this.scene.background = new THREE.Color(0x9fb4c8);
+    this.scene.fog = new THREE.Fog(0x9fb4c8, 95, 290);
+
+    const hemisphere = new THREE.HemisphereLight(0xcad9e8, 0x46505b, 2.5);
+    this.scene.add(hemisphere);
+
+    const sun = new THREE.DirectionalLight(0xfff3d1, 4.4);
+    sun.position.set(80, 120, 40);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -130;
+    sun.shadow.camera.right = 130;
+    sun.shadow.camera.top = 130;
+    sun.shadow.camera.bottom = -130;
+    sun.shadow.camera.near = 10;
+    sun.shadow.camera.far = 260;
+    this.scene.add(sun);
+  }
+
+  private readonly animate = (): void => {
+    const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    this.controller?.update(deltaSeconds);
+    this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
+    this.renderer.render(this.scene, this.camera);
+    this.animationId = window.requestAnimationFrame(this.animate);
+  };
+
+  private readonly resize = (): void => {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    this.camera.aspect = width / Math.max(height, 1);
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(width, height);
+  };
+
+  private readonly dispose = (): void => {
+    window.cancelAnimationFrame(this.animationId);
+    window.removeEventListener("resize", this.resize);
+    window.removeEventListener("beforeunload", this.dispose);
+    this.controller?.dispose();
+    this.renderer.dispose();
+  };
+}
