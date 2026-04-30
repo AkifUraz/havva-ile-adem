@@ -30,6 +30,11 @@ export class ThirdPersonController {
   private readonly lookTarget = new THREE.Vector3();
   private readonly movement = new THREE.Vector3();
   private readonly nextPosition = new THREE.Vector3();
+  private mixer?: THREE.AnimationMixer;
+  private idleAction?: THREE.AnimationAction;
+  private walkAction?: THREE.AnimationAction;
+  private currentAction?: THREE.AnimationAction;
+  private placeholderWalkTime = 0;
   private yaw = 0;
   private pitch = -0.18;
   private isLocked = false;
@@ -66,10 +71,11 @@ export class ThirdPersonController {
   update(deltaSeconds: number): void {
     const forward = Number(this.pressed.has("KeyW") || this.pressed.has("ArrowUp")) - Number(this.pressed.has("KeyS") || this.pressed.has("ArrowDown"));
     const strafe = Number(this.pressed.has("KeyD") || this.pressed.has("ArrowRight")) - Number(this.pressed.has("KeyA") || this.pressed.has("ArrowLeft"));
+    const isMoving = forward !== 0 || strafe !== 0;
 
     this.movement.set(0, 0, 0);
 
-    if (forward !== 0 || strafe !== 0) {
+    if (isMoving) {
       this.movement.set(strafe, 0, -forward).normalize();
       this.movement.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
       this.character.rotation.y = Math.atan2(this.movement.x, this.movement.z);
@@ -78,6 +84,7 @@ export class ThirdPersonController {
 
     this.moveAxis(this.movement.x, 0);
     this.moveAxis(0, this.movement.z);
+    this.updateCharacterAnimation(deltaSeconds, isMoving);
     this.updateCamera(deltaSeconds);
   }
 
@@ -184,9 +191,49 @@ export class ThirdPersonController {
 
       this.character.remove(this.placeholder);
       this.character.add(model);
+      this.setupAnimation(model, gltf.animations);
     } catch (error) {
       console.error("Could not load character-l.glb", error);
     }
+  }
+
+  private setupAnimation(model: THREE.Group, clips: THREE.AnimationClip[]): void {
+    this.mixer = new THREE.AnimationMixer(model);
+    const idleClip = THREE.AnimationClip.findByName(clips, "idle");
+    const walkClip = THREE.AnimationClip.findByName(clips, "walk");
+
+    if (idleClip) {
+      this.idleAction = this.mixer.clipAction(idleClip);
+      this.idleAction.enabled = true;
+      this.idleAction.play();
+      this.currentAction = this.idleAction;
+    }
+
+    if (walkClip) {
+      this.walkAction = this.mixer.clipAction(walkClip);
+      this.walkAction.enabled = true;
+      this.walkAction.timeScale = 1.15;
+    }
+  }
+
+  private updateCharacterAnimation(deltaSeconds: number, isMoving: boolean): void {
+    if (this.mixer) {
+      const nextAction = isMoving ? this.walkAction : this.idleAction;
+
+      if (nextAction && nextAction !== this.currentAction) {
+        nextAction.reset().fadeIn(0.16).play();
+        this.currentAction?.fadeOut(0.16);
+        this.currentAction = nextAction;
+      }
+
+      this.mixer.update(deltaSeconds);
+      return;
+    }
+
+    this.placeholderWalkTime += deltaSeconds * (isMoving ? 9 : 4);
+    const sway = Math.sin(this.placeholderWalkTime);
+    this.placeholder.position.y = isMoving ? Math.abs(sway) * 0.18 : Math.sin(this.placeholderWalkTime) * 0.04;
+    this.placeholder.rotation.z = isMoving ? sway * 0.08 : 0;
   }
 }
 
