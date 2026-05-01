@@ -30,7 +30,7 @@ export function createHud(root: HTMLElement): HudController {
   const lockButton = document.createElement("button");
   lockButton.className = "hud__lock";
   lockButton.type = "button";
-  lockButton.textContent = "Click the game, then use WASD or arrow keys to move. Hold and drag to look around.";
+  lockButton.textContent = "Move the hidden mouse to aim. Hold on a target to use power. WASD moves.";
 
   const reticle = document.createElement("div");
   reticle.className = "hud__reticle";

@@ -12,8 +12,6 @@ interface ForcePowerControllerOptions {
 
 const lockSeconds = 0.6;
 const maxTargetDistance = 95;
-const maxAimOffsetX = 180;
-const maxAimOffsetY = 220;
 
 export class ForcePowerController {
   private readonly camera: THREE.PerspectiveCamera;
@@ -30,8 +28,6 @@ export class ForcePowerController {
   private readonly aimPoint = new THREE.Vector2();
   private isHolding = false;
   private activePointerId: number | null = null;
-  private lastPointerX = 0;
-  private lastPointerY = 0;
   private aimOffsetX = 0;
   private aimOffsetY = 0;
   private hoveredTargetId = "";
@@ -111,23 +107,15 @@ export class ForcePowerController {
 
     this.isHolding = true;
     this.activePointerId = event.pointerId;
-    this.lastPointerX = event.clientX;
-    this.lastPointerY = event.clientY;
+    this.updateAimOffsetFromPointer(event);
   };
 
   private readonly handlePointerMove = (event: PointerEvent): void => {
-    if (!this.isHolding || this.activePointerId !== event.pointerId) {
+    if (!event.isPrimary) {
       return;
     }
 
-    const deltaX = event.clientX - this.lastPointerX;
-    const deltaY = event.clientY - this.lastPointerY;
-    this.lastPointerX = event.clientX;
-    this.lastPointerY = event.clientY;
-    const sensitivity = event.pointerType === "touch" ? 1.15 : 0.82;
-    this.aimOffsetX = THREE.MathUtils.clamp(this.aimOffsetX + deltaX * sensitivity, -maxAimOffsetX, maxAimOffsetX);
-    this.aimOffsetY = THREE.MathUtils.clamp(this.aimOffsetY + deltaY * sensitivity, -120, maxAimOffsetY);
-    this.setReticleOffset?.(this.aimOffsetX, this.aimOffsetY);
+    this.updateAimOffsetFromPointer(event);
   };
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
@@ -222,5 +210,14 @@ export class ForcePowerController {
     this.raycaster.setFromCamera(this.aimPoint, this.camera);
     this.rayOrigin.copy(this.raycaster.ray.origin);
     this.cameraDirection.copy(this.raycaster.ray.direction);
+  }
+
+  private updateAimOffsetFromPointer(event: PointerEvent): void {
+    const width = Math.max(window.innerWidth, 1);
+    const height = Math.max(window.innerHeight, 1);
+    const margin = 18;
+    this.aimOffsetX = THREE.MathUtils.clamp(event.clientX - width * 0.5, -width * 0.5 + margin, width * 0.5 - margin);
+    this.aimOffsetY = THREE.MathUtils.clamp(event.clientY - height * 0.5, -height * 0.5 + margin, height * 0.5 - margin);
+    this.setReticleOffset?.(this.aimOffsetX, this.aimOffsetY);
   }
 }
