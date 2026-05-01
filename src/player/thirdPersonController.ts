@@ -90,6 +90,8 @@ export class ThirdPersonController {
     this.updateCamera(1);
     void this.loadCharacterModel();
 
+    this.domElement.tabIndex = 0;
+    this.domElement.style.outline = "none";
     this.lockElement.addEventListener("click", this.requestLock);
     document.addEventListener("pointerlockchange", this.handlePointerLockChange);
     document.addEventListener("mousemove", this.handleMouseMove);
@@ -184,6 +186,7 @@ export class ThirdPersonController {
       return;
     }
 
+    this.domElement.focus();
     this.isDraggingLook = true;
     this.activePointerId = event.pointerId;
     this.lastPointerX = event.clientX;

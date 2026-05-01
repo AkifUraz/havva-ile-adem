@@ -87,7 +87,7 @@ export class CitySandboxApp {
       setForceActive: (isActive) => this.controller?.setForcePose(isActive),
     });
 
-    this.hud.setMessage("WASD moves. Hold Space to fly. Hold on a target to lift it, release to throw.");
+    this.hud.setMessage("Click the game, then use WASD or arrow keys to move. Hold Space to fly. Hold on a target to lift it, release to throw.");
     this.animate();
   }
 
