@@ -37,13 +37,19 @@ export class ThirdPersonController {
   private readonly placeholder = createPlaceholderCharacter();
   private readonly targetCameraPosition = new THREE.Vector3();
   private readonly lookTarget = new THREE.Vector3();
+  private readonly cameraForward = new THREE.Vector3();
+  private readonly cameraRight = new THREE.Vector3();
   private readonly movement = new THREE.Vector3();
   private readonly nextPosition = new THREE.Vector3();
   private mixer?: THREE.AnimationMixer;
   private idleAction?: THREE.AnimationAction;
   private walkAction?: THREE.AnimationAction;
   private currentAction?: THREE.AnimationAction;
+  private leftArm?: THREE.Object3D;
+  private rightArm?: THREE.Object3D;
   private placeholderWalkTime = 0;
+  private forcePoseAmount = 0;
+  private wantsForcePose = false;
   private yaw = 0;
   private pitch = -0.22;
   private isLocked = false;
@@ -144,6 +150,10 @@ export class ThirdPersonController {
 
   getPosition(target: THREE.Vector3): THREE.Vector3 {
     return target.copy(this.character.position);
+  }
+
+  setForcePose(isActive: boolean): void {
+    this.wantsForcePose = isActive;
   }
 
   private readonly requestLock = (): void => {
@@ -280,16 +290,19 @@ export class ThirdPersonController {
   private updateCamera(deltaSeconds: number): void {
     const horizontalDistance = this.cameraDistance * Math.cos(this.pitch);
     const verticalOffset = this.cameraHeight + this.cameraDistance * Math.sin(this.pitch);
-    const behind = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)).multiplyScalar(horizontalDistance);
+    this.cameraForward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize();
+    this.cameraRight.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize();
+    const behind = this.cameraForward.clone().multiplyScalar(-horizontalDistance);
+    const shoulderOffset = this.cameraRight.clone().multiplyScalar(2.15);
 
-    this.targetCameraPosition.copy(this.character.position).add(behind);
+    this.targetCameraPosition.copy(this.character.position).add(behind).add(shoulderOffset);
     this.targetCameraPosition.y += verticalOffset;
 
     const smoothing = 1 - Math.exp(-deltaSeconds * 9);
     this.camera.position.lerp(this.targetCameraPosition, smoothing);
 
-    this.lookTarget.copy(this.character.position);
-    this.lookTarget.y += 4.25;
+    this.lookTarget.copy(this.character.position).addScaledVector(this.cameraForward, 13);
+    this.lookTarget.y += 3.45;
     this.camera.lookAt(this.lookTarget);
   }
 
@@ -316,6 +329,8 @@ export class ThirdPersonController {
 
       this.character.remove(this.placeholder);
       this.character.add(model);
+      this.leftArm = model.getObjectByName("arm-left");
+      this.rightArm = model.getObjectByName("arm-right");
       this.setupAnimation(model, gltf.animations);
     } catch (error) {
       console.error(`Could not load character-${characterId}.glb`, error);
@@ -352,6 +367,7 @@ export class ThirdPersonController {
       }
 
       this.mixer.update(deltaSeconds);
+      this.updateForcePose(deltaSeconds);
       return;
     }
 
@@ -359,6 +375,22 @@ export class ThirdPersonController {
     const sway = Math.sin(this.placeholderWalkTime);
     this.placeholder.position.y = isMoving ? Math.abs(sway) * 0.18 : Math.sin(this.placeholderWalkTime) * 0.04;
     this.placeholder.rotation.z = isMoving ? sway * 0.08 : 0;
+    this.updateForcePose(deltaSeconds);
+  }
+
+  private updateForcePose(deltaSeconds: number): void {
+    const targetAmount = this.wantsForcePose ? 1 : 0;
+    this.forcePoseAmount = THREE.MathUtils.lerp(this.forcePoseAmount, targetAmount, 1 - Math.exp(-deltaSeconds * 12));
+    const amount = this.forcePoseAmount;
+
+    if (this.leftArm && this.rightArm) {
+      this.leftArm.rotation.x = -1.05 * amount;
+      this.leftArm.rotation.y = -0.18 * amount;
+      this.leftArm.rotation.z = 0.48 * amount;
+      this.rightArm.rotation.x = -1.05 * amount;
+      this.rightArm.rotation.y = 0.18 * amount;
+      this.rightArm.rotation.z = -0.48 * amount;
+    }
   }
 }
 

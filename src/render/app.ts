@@ -81,6 +81,7 @@ export class CitySandboxApp {
       domElement: this.renderer.domElement,
       getTargets: () => [...(this.npcSystem?.getForceTargets() ?? []), ...(this.carTrafficSystem?.getForceTargets() ?? [])],
       setHudProgress: (progress, isLocked) => this.hud.setForceProgress(progress, isLocked),
+      setForceActive: (isActive) => this.controller?.setForcePose(isActive),
     });
 
     this.hud.setMessage("WASD moves. Hold Space to fly. Hold on a target to lift it, release to throw.");

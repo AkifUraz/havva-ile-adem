@@ -6,6 +6,7 @@ interface ForcePowerControllerOptions {
   domElement: HTMLElement;
   getTargets: () => ForceTarget[];
   setHudProgress: (progress: number, isLocked: boolean) => void;
+  setForceActive?: (isActive: boolean) => void;
 }
 
 const lockSeconds = 0.6;
@@ -16,6 +17,7 @@ export class ForcePowerController {
   private readonly domElement: HTMLElement;
   private readonly getTargets: () => ForceTarget[];
   private readonly setHudProgress: (progress: number, isLocked: boolean) => void;
+  private readonly setForceActive?: (isActive: boolean) => void;
   private readonly cameraDirection = new THREE.Vector3();
   private readonly targetPosition = new THREE.Vector3();
   private readonly holdPosition = new THREE.Vector3();
@@ -32,6 +34,7 @@ export class ForcePowerController {
     this.domElement = options.domElement;
     this.getTargets = options.getTargets;
     this.setHudProgress = options.setHudProgress;
+    this.setForceActive = options.setForceActive;
 
     this.domElement.addEventListener("pointerdown", this.handlePointerDown);
     this.domElement.addEventListener("pointerup", this.handlePointerUp);
@@ -47,6 +50,7 @@ export class ForcePowerController {
     if (this.lockedTarget) {
       this.updateHeldTarget();
       this.setHudProgress(1, true);
+      this.setForceActive?.(true);
       return;
     }
 
@@ -64,11 +68,13 @@ export class ForcePowerController {
 
     this.lockProgress = Math.min(1, this.lockProgress + deltaSeconds / lockSeconds);
     this.setHudProgress(this.lockProgress, false);
+    this.setForceActive?.(this.lockProgress > 0.08);
 
     if (this.lockProgress >= 1) {
       this.lockedTarget = target;
       this.holdDistance = THREE.MathUtils.clamp(this.camera.position.distanceTo(target.object.getWorldPosition(this.targetPosition)), 10, 34);
       this.updateHeldTarget();
+      this.setForceActive?.(true);
     }
   }
 
@@ -123,6 +129,7 @@ export class ForcePowerController {
     this.lockedTarget.setForceHeld(false);
     this.lockedTarget.applyForceImpulse(impulse);
     this.lockedTarget = undefined;
+    this.setForceActive?.(false);
   }
 
   private resetLock(): void {
@@ -133,6 +140,7 @@ export class ForcePowerController {
     this.hoveredTargetId = "";
     this.lockProgress = 0;
     this.setHudProgress(0, false);
+    this.setForceActive?.(false);
   }
 
   private findCenteredTarget(): ForceTarget | undefined {
