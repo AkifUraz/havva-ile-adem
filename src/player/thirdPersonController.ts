@@ -95,7 +95,8 @@ export class ThirdPersonController {
 
       this.movement.set(strafe, 0, -forward).normalize();
       this.movement.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.movementYawBase);
-      const targetYaw = Math.atan2(-this.movement.x, -this.movement.z);
+      const isBackpedaling = forward < 0;
+      const targetYaw = isBackpedaling ? this.movementYawBase : Math.atan2(-this.movement.x, -this.movement.z);
       this.character.rotation.y = targetYaw;
       this.yaw = lerpAngle(this.yaw, targetYaw, 1 - Math.exp(-deltaSeconds * 8));
       this.movement.multiplyScalar(this.speed * deltaSeconds);
