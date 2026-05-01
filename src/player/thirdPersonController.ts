@@ -49,7 +49,7 @@ export class ThirdPersonController {
   private lastPointerY = 0;
   private movementInputSignature = "";
   private movementYawBase = 0;
-  private readonly playerRadius = 1.05;
+  private readonly playerRadius = 1.25;
   private readonly speed = 18;
   private readonly cameraDistance = 7.2;
   private readonly cameraHeight = 6.7;
