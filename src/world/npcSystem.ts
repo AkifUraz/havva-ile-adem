@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { buildingColliders, cityBounds, type ColliderRect } from "./cityLayout";
 import { keepOutOfBuildings } from "./collisionUtils";
+import { createDebrisFromObject, disposeDebris, type DebrisPiece, updateDebrisPieces } from "./debrisSystem";
 import type { ForceTarget } from "./forceTarget";
 
 type NpcState = "walking" | "pausing" | "lookingAround";
@@ -39,6 +40,8 @@ interface NpcWalker {
   forceHeld: boolean;
   forceVelocity: THREE.Vector3;
   forceFlailTime: number;
+  forcePeakY: number;
+  shattered: boolean;
 }
 
 export interface NpcSystem {
@@ -118,17 +121,21 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         forceHeld: false,
         forceVelocity: new THREE.Vector3(),
         forceFlailTime: random01(config.seed) * Math.PI * 2,
+        forcePeakY: 0.18,
+        shattered: false,
       };
     }),
   );
+  const debrisPieces: DebrisPiece[] = [];
 
   return {
     update(deltaSeconds: number, playerPosition?: THREE.Vector3) {
-      walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition));
+      walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition, scene, debrisPieces));
+      updateDebrisPieces(debrisPieces, deltaSeconds);
     },
     getColliders() {
       return walkers
-        .filter((walker) => !walker.forceHeld && walker.root.position.y < 1.2)
+        .filter((walker) => !walker.shattered && !walker.forceHeld && walker.root.position.y < 1.2)
         .map((walker) => ({
           x: walker.root.position.x,
           z: walker.root.position.z,
@@ -136,18 +143,23 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         }));
     },
     getForceTargets() {
-      return walkers.map((walker, index) => createNpcForceTarget(walker, index));
+      return walkers.filter((walker) => !walker.shattered).map((walker, index) => createNpcForceTarget(walker, index));
     },
     dispose() {
       walkers.forEach((walker) => {
         walker.mixer?.stopAllAction();
         scene.remove(walker.root);
       });
+      disposeDebris(scene, debrisPieces);
     },
   };
 }
 
-function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition?: THREE.Vector3): void {
+function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition: THREE.Vector3 | undefined, scene: THREE.Scene, debrisPieces: DebrisPiece[]): void {
+  if (walker.shattered) {
+    return;
+  }
+
   walker.mixer?.update(deltaSeconds);
 
   if (walker.forceHeld) {
@@ -157,7 +169,7 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition?: 
   }
 
   if (walker.forceVelocity.lengthSq() > 0.01 || walker.root.position.y > 0.19) {
-    updateForceMotion(walker, deltaSeconds);
+    updateForceMotion(walker, deltaSeconds, scene, debrisPieces);
     return;
   }
 
@@ -440,6 +452,7 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
     setForceHeld(isHeld: boolean, holdPosition?: THREE.Vector3) {
       walker.forceHeld = isHeld;
       walker.forceVelocity.set(0, 0, 0);
+      walker.forcePeakY = Math.max(walker.forcePeakY, walker.root.position.y);
       setNpcAnimation(walker, "idle");
 
       if (holdPosition) {
@@ -450,6 +463,7 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
     applyForceImpulse(velocity: THREE.Vector3) {
       walker.forceHeld = false;
       walker.forceVelocity.copy(velocity);
+      walker.forcePeakY = Math.max(walker.forcePeakY, walker.root.position.y);
       walker.state = "pausing";
       walker.stateTime = 1.2;
       setNpcAnimation(walker, "idle");
@@ -457,12 +471,20 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
   };
 }
 
-function updateForceMotion(walker: NpcWalker, deltaSeconds: number): void {
+function updateForceMotion(walker: NpcWalker, deltaSeconds: number, scene: THREE.Scene, debrisPieces: DebrisPiece[]): void {
   setNpcAnimation(walker, "idle");
   updateForceFlail(walker, deltaSeconds);
+  const impactVelocity = walker.forceVelocity.clone();
   walker.forceVelocity.y -= 22 * deltaSeconds;
   walker.root.position.addScaledVector(walker.forceVelocity, deltaSeconds);
-  keepOutOfBuildings(walker.root.position, npcRadius + 0.7);
+  const hitBuilding = keepOutOfBuildings(walker.root.position, npcRadius + 0.7);
+  walker.forcePeakY = Math.max(walker.forcePeakY, walker.root.position.y);
+
+  if (hitBuilding && getHorizontalSpeed(impactVelocity) > 12) {
+    shatterNpc(walker, scene, debrisPieces, impactVelocity);
+    return;
+  }
+
   walker.forceVelocity.x *= Math.exp(-deltaSeconds * 0.65);
   walker.forceVelocity.z *= Math.exp(-deltaSeconds * 0.65);
   walker.root.position.x = THREE.MathUtils.clamp(walker.root.position.x, cityBounds.minX, cityBounds.maxX);
@@ -470,8 +492,31 @@ function updateForceMotion(walker: NpcWalker, deltaSeconds: number): void {
 
   if (walker.root.position.y <= 0.18) {
     walker.root.position.y = 0.18;
+    if (walker.forcePeakY > 18 || impactVelocity.y < -18) {
+      shatterNpc(walker, scene, debrisPieces, impactVelocity);
+      return;
+    }
+
     walker.forceVelocity.set(0, 0, 0);
+    walker.forcePeakY = 0.18;
   }
+}
+
+function shatterNpc(walker: NpcWalker, scene: THREE.Scene, debrisPieces: DebrisPiece[], impactVelocity: THREE.Vector3): void {
+  if (walker.shattered) {
+    return;
+  }
+
+  walker.shattered = true;
+  walker.forceHeld = false;
+  walker.forceVelocity.set(0, 0, 0);
+  walker.mixer?.stopAllAction();
+  walker.root.visible = false;
+  debrisPieces.push(...createDebrisFromObject(scene, walker.root, impactVelocity));
+}
+
+function getHorizontalSpeed(velocity: THREE.Vector3): number {
+  return Math.hypot(velocity.x, velocity.z);
 }
 
 function updateForceFlail(walker: NpcWalker, deltaSeconds: number): void {

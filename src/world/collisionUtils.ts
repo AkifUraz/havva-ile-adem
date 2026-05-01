@@ -5,7 +5,9 @@ interface PositionLike {
   z: number;
 }
 
-export function keepOutOfBuildings(position: PositionLike, radius: number): void {
+export function keepOutOfBuildings(position: PositionLike, radius: number): boolean {
+  let wasPushed = false;
+
   buildingColliders.forEach((collider) => {
     const minX = collider.minX - radius;
     const maxX = collider.maxX + radius;
@@ -31,8 +33,11 @@ export function keepOutOfBuildings(position: PositionLike, radius: number): void
     } else {
       position.z = maxZ;
     }
+
+    wasPushed = true;
   });
 
   position.x = Math.max(cityBounds.minX, Math.min(cityBounds.maxX, position.x));
   position.z = Math.max(cityBounds.minZ, Math.min(cityBounds.maxZ, position.z));
+  return wasPushed;
 }
