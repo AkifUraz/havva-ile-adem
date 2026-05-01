@@ -43,7 +43,6 @@ async function loadRequiredAssets(): Promise<LoadedAsset[]> {
 
   cityBlocks.forEach((block) => {
     neededIds.add(block.assetId);
-    block.detailIds.forEach((detailId) => neededIds.add(detailId));
   });
 
   assetCatalog
@@ -125,26 +124,12 @@ function createCityBlocks(city: THREE.Group, loadedById: Map<string, LoadedAsset
     }
 
     const isSkyscraper = loaded.entry.category === "skyscraper";
-    const targetHeight = isSkyscraper ? 42 * block.scale : 26 * block.scale;
-    const building = instantiateAsset(loaded.scene, blockSize * 0.78, targetHeight);
+    const targetHeight = isSkyscraper ? 48 * block.scale : 34 * block.scale;
+    const building = instantiateAsset(loaded.scene, blockSize * 0.9, targetHeight);
     building.name = `city-block-${block.assetId}`;
     building.position.set(block.x, 0.18, block.z);
     building.rotation.y = block.rotationY;
     city.add(building);
-
-    block.detailIds.forEach((detailId, index) => {
-      const detail = loadedById.get(detailId);
-
-      if (!detail) {
-        return;
-      }
-
-      const prop = instantiateAsset(detail.scene, index === 0 ? 8 : 5, index === 0 ? 4 : 3);
-      const side = index % 2 === 0 ? -1 : 1;
-      prop.position.set(block.x + side * 10.8, 0.2, block.z + (index === 0 ? -13.5 : 13.5));
-      prop.rotation.y = index === 0 ? block.rotationY : block.rotationY + Math.PI;
-      city.add(prop);
-    });
   });
 }
 
