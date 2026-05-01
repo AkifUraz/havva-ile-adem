@@ -3,6 +3,8 @@ import { ThirdPersonController } from "../player/thirdPersonController";
 import type { HudController } from "../ui/hud";
 import { buildingColliders, cityBounds } from "../world/cityLayout";
 import { createCity } from "../world/createCity";
+import type { CarTrafficSystem } from "../world/carTrafficSystem";
+import { createCarTrafficSystem } from "../world/carTrafficSystem";
 import type { NpcSystem } from "../world/npcSystem";
 import { createNpcSystem } from "../world/npcSystem";
 
@@ -15,6 +17,7 @@ export class CitySandboxApp {
   private readonly clock = new THREE.Clock();
   private controller?: ThirdPersonController;
   private npcSystem?: NpcSystem;
+  private carTrafficSystem?: CarTrafficSystem;
   private isDisposed = false;
   private animationId = 0;
 
@@ -33,6 +36,19 @@ export class CitySandboxApp {
     window.addEventListener("beforeunload", this.dispose);
 
     await createCity(this.scene, this.renderer);
+    void createCarTrafficSystem(this.scene)
+      .then((carTrafficSystem) => {
+        if (this.isDisposed) {
+          carTrafficSystem.dispose();
+          return;
+        }
+
+        this.carTrafficSystem = carTrafficSystem;
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load traffic cars", error);
+      });
+
     void createNpcSystem(this.scene)
       .then((npcSystem) => {
         if (this.isDisposed) {
@@ -92,6 +108,7 @@ export class CitySandboxApp {
 
   private readonly animate = (): void => {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    this.carTrafficSystem?.update(deltaSeconds);
     this.npcSystem?.update(deltaSeconds);
     this.controller?.update(deltaSeconds);
     this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
@@ -114,6 +131,7 @@ export class CitySandboxApp {
     window.removeEventListener("beforeunload", this.dispose);
     this.controller?.dispose();
     this.npcSystem?.dispose();
+    this.carTrafficSystem?.dispose();
     this.renderer.dispose();
   };
 }

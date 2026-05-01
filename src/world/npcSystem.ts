@@ -42,11 +42,11 @@ export interface NpcSystem {
 const npcRadius = 0.9;
 const walkGraph = createWalkGraph();
 const npcConfigs: NpcConfig[] = [
-  { characterId: "b", startNode: "-46:92", speed: 2.45, seed: 11 },
-  { characterId: "d", startNode: "46:92", speed: 2.1, seed: 23 },
-  { characterId: "h", startNode: "-92:0", speed: 2.35, seed: 37 },
-  { characterId: "n", startNode: "-46:-92", speed: 1.95, seed: 41 },
-  { characterId: "q", startNode: "0:46", speed: 2.7, seed: 53 },
+  { characterId: "b", startNode: "-56:88", speed: 2.45, seed: 11 },
+  { characterId: "d", startNode: "36:88", speed: 2.1, seed: 23 },
+  { characterId: "h", startNode: "-88:-10", speed: 2.35, seed: 37 },
+  { characterId: "n", startNode: "-56:-88", speed: 1.95, seed: 41 },
+  { characterId: "q", startNode: "-10:36", speed: 2.7, seed: 53 },
 ];
 
 const npcTextureMap: Record<string, string> = {
@@ -210,7 +210,7 @@ function chooseSafeDetour(walker: NpcWalker): void {
 
 function createWalkGraph(): Map<string, WalkNode> {
   const graph = new Map<string, WalkNode>();
-  const coordinates = [-92, -46, 0, 46, 92];
+  const coordinates = [-88, -56, -10, 36, 88];
 
   coordinates.forEach((z) => {
     coordinates.forEach((x) => {
@@ -245,7 +245,7 @@ function createNodeId(x: number, z: number): string {
 }
 
 function isAdjacentCoordinate(a: number, b: number): boolean {
-  return Math.abs(a - b) === 46;
+  return Math.abs(a - b) <= 48;
 }
 
 function getNode(nodeId: string): WalkNode {
