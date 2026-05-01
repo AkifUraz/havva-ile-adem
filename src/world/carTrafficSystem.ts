@@ -134,11 +134,15 @@ function updateCar(car: TrafficCar, deltaSeconds: number): void {
   const step = Math.min(distance, car.route.speed * deltaSeconds);
   car.root.position.x += directionX * step;
   car.root.position.z += directionZ * step;
-  car.root.rotation.y = Math.atan2(directionX, directionZ) + Math.PI * 0.5;
+  car.root.rotation.y = getHeadingYaw(directionX, directionZ);
 }
 
 function faceNextPoint(root: THREE.Group, current: { x: number; z: number }, next: { x: number; z: number }): void {
-  root.rotation.y = Math.atan2(next.x - current.x, next.z - current.z) + Math.PI * 0.5;
+  root.rotation.y = getHeadingYaw(next.x - current.x, next.z - current.z);
+}
+
+function getHeadingYaw(directionX: number, directionZ: number): number {
+  return Math.atan2(directionX, directionZ);
 }
 
 function normalizeCarModel(source: THREE.Group, targetLength: number): THREE.Group {
