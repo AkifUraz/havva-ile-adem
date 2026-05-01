@@ -22,6 +22,7 @@ interface TrafficCar {
   forceVelocity: THREE.Vector3;
   forcePeakY: number;
   shattered: boolean;
+  respawnTime: number;
 }
 
 export interface TrafficCollider {
@@ -33,9 +34,10 @@ export interface TrafficCollider {
 }
 
 export interface CarTrafficSystem {
-  update(deltaSeconds: number): void;
+  update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
   getColliders(): TrafficCollider[];
   getForceTargets(): ForceTarget[];
+  setPanic(isPanicking: boolean): void;
   dispose(): void;
 }
 
@@ -102,7 +104,7 @@ const trafficRoutes: TrafficRoute[] = [
   },
 ];
 
-export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTrafficSystem> {
+export async function createCarTrafficSystem(scene: THREE.Scene, onShatter?: () => void): Promise<CarTrafficSystem> {
   const loadingManager = new THREE.LoadingManager();
   loadingManager.setURLModifier((url) => {
     return url.endsWith("Textures/colormap.png") ? "/assets/cars/Textures/colormap.png" : url;
@@ -128,26 +130,31 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
         forceVelocity: new THREE.Vector3(),
         forcePeakY: 0.2,
         shattered: false,
+        respawnTime: 0,
       };
     }),
   );
   const debrisPieces: DebrisPiece[] = [];
+  let isPanicking = false;
 
   return {
-    update(deltaSeconds: number) {
+    update(deltaSeconds: number, playerPosition?: THREE.Vector3) {
       const colliders = cars.map((car) => (car.shattered ? undefined : getTrafficCollider(car)));
       cars.forEach((car, index) => {
         const otherColliders = colliders.filter((collider, colliderIndex): collider is TrafficCollider => colliderIndex !== index && collider !== undefined);
-        updateCar(car, deltaSeconds, otherColliders, scene, debrisPieces);
+        updateCar(car, deltaSeconds, otherColliders, scene, debrisPieces, isPanicking, onShatter, playerPosition);
         colliders[index] = car.shattered ? undefined : getTrafficCollider(car);
       });
-      updateDebrisPieces(debrisPieces, deltaSeconds);
+      updateDebrisPieces(scene, debrisPieces, deltaSeconds);
     },
     getColliders() {
       return cars.filter((car) => !car.shattered && !car.forceHeld && car.root.position.y < 1.2).map((car) => getTrafficCollider(car));
     },
     getForceTargets() {
       return cars.filter((car) => !car.shattered).map((car, index) => createCarForceTarget(car, index));
+    },
+    setPanic(nextIsPanicking: boolean) {
+      isPanicking = nextIsPanicking;
     },
     dispose() {
       cars.forEach((car) => scene.remove(car.root));
@@ -156,8 +163,18 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
   };
 }
 
-function updateCar(car: TrafficCar, deltaSeconds: number, otherColliders: TrafficCollider[], scene: THREE.Scene, debrisPieces: DebrisPiece[]): void {
+function updateCar(
+  car: TrafficCar,
+  deltaSeconds: number,
+  otherColliders: TrafficCollider[],
+  scene: THREE.Scene,
+  debrisPieces: DebrisPiece[],
+  isPanicking: boolean,
+  onShatter?: () => void,
+  playerPosition?: THREE.Vector3,
+): void {
   if (car.shattered) {
+    updateCarRespawn(car, deltaSeconds);
     return;
   }
 
@@ -167,7 +184,12 @@ function updateCar(car: TrafficCar, deltaSeconds: number, otherColliders: Traffi
   }
 
   if (car.forceVelocity.lengthSq() > 0.01 || car.root.position.y > 0.21) {
-    updateForceMotion(car, deltaSeconds, scene, debrisPieces);
+    updateForceMotion(car, deltaSeconds, scene, debrisPieces, onShatter);
+    return;
+  }
+
+  if (isPanicking && playerPosition) {
+    updatePanickedCar(car, deltaSeconds, otherColliders, playerPosition);
     return;
   }
 
@@ -205,6 +227,33 @@ function updateCar(car: TrafficCar, deltaSeconds: number, otherColliders: Traffi
   spinWheels(car.wheels, step);
 }
 
+function updatePanickedCar(car: TrafficCar, deltaSeconds: number, otherColliders: TrafficCollider[], playerPosition: THREE.Vector3): void {
+  const awayX = car.root.position.x - playerPosition.x;
+  const awayZ = car.root.position.z - playerPosition.z;
+  const distance = Math.max(0.001, Math.hypot(awayX, awayZ));
+  const directionX = awayX / distance;
+  const directionZ = awayZ / distance;
+  const step = Math.min(18 * deltaSeconds, 0.9);
+  const yaw = getHeadingYaw(directionX, directionZ);
+  const nextCollider = getTrafficCollider(car, {
+    x: THREE.MathUtils.clamp(car.root.position.x + directionX * step, cityBounds.minX, cityBounds.maxX),
+    z: THREE.MathUtils.clamp(car.root.position.z + directionZ * step, cityBounds.minZ, cityBounds.maxZ),
+    yaw,
+  });
+  keepOutOfBuildings(nextCollider, car.route.length * 0.34);
+
+  if (otherColliders.some((collider) => trafficCollidersOverlap(nextCollider, collider))) {
+    car.waiting = true;
+    return;
+  }
+
+  car.waiting = false;
+  car.root.position.x = nextCollider.x;
+  car.root.position.z = nextCollider.z;
+  car.root.rotation.y = yaw;
+  spinWheels(car.wheels, step);
+}
+
 function createCarForceTarget(car: TrafficCar, index: number): ForceTarget {
   return {
     id: `car-${index}`,
@@ -231,7 +280,13 @@ function createCarForceTarget(car: TrafficCar, index: number): ForceTarget {
   };
 }
 
-function updateForceMotion(car: TrafficCar, deltaSeconds: number, scene: THREE.Scene, debrisPieces: DebrisPiece[]): void {
+function updateForceMotion(
+  car: TrafficCar,
+  deltaSeconds: number,
+  scene: THREE.Scene,
+  debrisPieces: DebrisPiece[],
+  onShatter?: () => void,
+): void {
   car.waiting = true;
   const impactVelocity = car.forceVelocity.clone();
   car.forceVelocity.y -= 24 * deltaSeconds;
@@ -240,7 +295,7 @@ function updateForceMotion(car: TrafficCar, deltaSeconds: number, scene: THREE.S
   car.forcePeakY = Math.max(car.forcePeakY, car.root.position.y);
 
   if (hitBuilding && getHorizontalSpeed(impactVelocity) > 16) {
-    shatterCar(car, scene, debrisPieces, impactVelocity);
+    shatterCar(car, scene, debrisPieces, impactVelocity, onShatter);
     return;
   }
 
@@ -252,7 +307,7 @@ function updateForceMotion(car: TrafficCar, deltaSeconds: number, scene: THREE.S
   if (car.root.position.y <= 0.2) {
     car.root.position.y = 0.2;
     if (car.forcePeakY > 22 || impactVelocity.y < -22) {
-      shatterCar(car, scene, debrisPieces, impactVelocity);
+      shatterCar(car, scene, debrisPieces, impactVelocity, onShatter);
       return;
     }
 
@@ -262,7 +317,13 @@ function updateForceMotion(car: TrafficCar, deltaSeconds: number, scene: THREE.S
   }
 }
 
-function shatterCar(car: TrafficCar, scene: THREE.Scene, debrisPieces: DebrisPiece[], impactVelocity: THREE.Vector3): void {
+function shatterCar(
+  car: TrafficCar,
+  scene: THREE.Scene,
+  debrisPieces: DebrisPiece[],
+  impactVelocity: THREE.Vector3,
+  onShatter?: () => void,
+): void {
   if (car.shattered) {
     return;
   }
@@ -271,8 +332,29 @@ function shatterCar(car: TrafficCar, scene: THREE.Scene, debrisPieces: DebrisPie
   car.forceHeld = false;
   car.forceVelocity.set(0, 0, 0);
   car.waiting = true;
+  car.respawnTime = 7;
   car.root.visible = false;
   debrisPieces.push(...createDebrisFromObject(scene, car.root, impactVelocity));
+  onShatter?.();
+}
+
+function updateCarRespawn(car: TrafficCar, deltaSeconds: number): void {
+  car.respawnTime -= deltaSeconds;
+
+  if (car.respawnTime > 0) {
+    return;
+  }
+
+  const firstPoint = car.route.points[0];
+  car.root.position.set(firstPoint.x, 0.2, firstPoint.z);
+  faceNextPoint(car.root, firstPoint, car.route.points[1]);
+  car.targetIndex = 1;
+  car.waiting = false;
+  car.forceHeld = false;
+  car.forceVelocity.set(0, 0, 0);
+  car.forcePeakY = 0.2;
+  car.shattered = false;
+  car.root.visible = true;
 }
 
 function getHorizontalSpeed(velocity: THREE.Vector3): number {

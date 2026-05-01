@@ -42,12 +42,14 @@ interface NpcWalker {
   forceFlailTime: number;
   forcePeakY: number;
   shattered: boolean;
+  respawnTime: number;
 }
 
 export interface NpcSystem {
   update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
   getColliders(): NpcCollider[];
   getForceTargets(): ForceTarget[];
+  setPanic(isPanicking: boolean): void;
   dispose(): void;
 }
 
@@ -76,7 +78,7 @@ const npcTextureMap: Record<string, string> = {
   "texture-q.png": "doku-f.png",
 };
 
-export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
+export async function createNpcSystem(scene: THREE.Scene, onShatter?: () => void): Promise<NpcSystem> {
   const loadingManager = new THREE.LoadingManager();
   loadingManager.setURLModifier((url) => {
     const match = url.match(/Textures\/(texture-[a-z]\.png)$/i);
@@ -123,15 +125,17 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         forceFlailTime: random01(config.seed) * Math.PI * 2,
         forcePeakY: 0.18,
         shattered: false,
+        respawnTime: 0,
       };
     }),
   );
   const debrisPieces: DebrisPiece[] = [];
+  let isPanicking = false;
 
   return {
     update(deltaSeconds: number, playerPosition?: THREE.Vector3) {
-      walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition, scene, debrisPieces));
-      updateDebrisPieces(debrisPieces, deltaSeconds);
+      walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition, scene, debrisPieces, isPanicking, onShatter));
+      updateDebrisPieces(scene, debrisPieces, deltaSeconds);
     },
     getColliders() {
       return walkers
@@ -145,6 +149,9 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
     getForceTargets() {
       return walkers.filter((walker) => !walker.shattered).map((walker, index) => createNpcForceTarget(walker, index));
     },
+    setPanic(nextIsPanicking: boolean) {
+      isPanicking = nextIsPanicking;
+    },
     dispose() {
       walkers.forEach((walker) => {
         walker.mixer?.stopAllAction();
@@ -155,8 +162,17 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
   };
 }
 
-function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition: THREE.Vector3 | undefined, scene: THREE.Scene, debrisPieces: DebrisPiece[]): void {
+function updateWalker(
+  walker: NpcWalker,
+  deltaSeconds: number,
+  playerPosition: THREE.Vector3 | undefined,
+  scene: THREE.Scene,
+  debrisPieces: DebrisPiece[],
+  isPanicking: boolean,
+  onShatter?: () => void,
+): void {
   if (walker.shattered) {
+    updateNpcRespawn(walker, deltaSeconds);
     return;
   }
 
@@ -169,7 +185,12 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition: T
   }
 
   if (walker.forceVelocity.lengthSq() > 0.01 || walker.root.position.y > 0.19) {
-    updateForceMotion(walker, deltaSeconds, scene, debrisPieces);
+    updateForceMotion(walker, deltaSeconds, scene, debrisPieces, onShatter);
+    return;
+  }
+
+  if (isPanicking && playerPosition) {
+    updatePanicRun(walker, deltaSeconds, playerPosition);
     return;
   }
 
@@ -177,7 +198,6 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition: T
     setNpcAnimation(walker, "idle");
     return;
   }
-
   if (walker.state === "pausing") {
     updatePause(walker, deltaSeconds);
     return;
@@ -256,6 +276,41 @@ function updateLookAround(walker: NpcWalker, deltaSeconds: number): void {
     walker.root.rotation.y = walker.baseRotation;
     walker.state = "walking";
   }
+}
+
+function updatePanicRun(walker: NpcWalker, deltaSeconds: number, playerPosition: THREE.Vector3): void {
+  setNpcAnimation(walker, "walk");
+  updatePanicArms(walker, deltaSeconds);
+  const awayX = walker.root.position.x - playerPosition.x;
+  const awayZ = walker.root.position.z - playerPosition.z;
+  const distance = Math.max(0.001, Math.hypot(awayX, awayZ));
+  const directionX = awayX / distance;
+  const directionZ = awayZ / distance;
+  const step = Math.min(5.8 * deltaSeconds, 0.42);
+  const nextX = THREE.MathUtils.clamp(walker.root.position.x + directionX * step, cityBounds.minX, cityBounds.maxX);
+  const nextZ = THREE.MathUtils.clamp(walker.root.position.z + directionZ * step, cityBounds.minZ, cityBounds.maxZ);
+
+  if (!intersectsAnyCollider(nextX, nextZ)) {
+    walker.root.position.x = nextX;
+    walker.root.position.z = nextZ;
+  }
+
+  walker.root.rotation.y = Math.atan2(directionX, directionZ) + Math.PI;
+}
+
+function updatePanicArms(walker: NpcWalker, deltaSeconds: number): void {
+  if (!walker.leftArm || !walker.rightArm) {
+    return;
+  }
+
+  walker.forceFlailTime += deltaSeconds * 11;
+  const wave = Math.sin(walker.forceFlailTime) * 0.22;
+  walker.leftArm.rotation.x = -1.35 + wave;
+  walker.leftArm.rotation.y = -0.22;
+  walker.leftArm.rotation.z = 0.92 + wave * 0.4;
+  walker.rightArm.rotation.x = -1.35 - wave;
+  walker.rightArm.rotation.y = 0.22;
+  walker.rightArm.rotation.z = -0.92 + wave * 0.4;
 }
 
 function arriveAtNode(walker: NpcWalker): void {
@@ -471,7 +526,13 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
   };
 }
 
-function updateForceMotion(walker: NpcWalker, deltaSeconds: number, scene: THREE.Scene, debrisPieces: DebrisPiece[]): void {
+function updateForceMotion(
+  walker: NpcWalker,
+  deltaSeconds: number,
+  scene: THREE.Scene,
+  debrisPieces: DebrisPiece[],
+  onShatter?: () => void,
+): void {
   setNpcAnimation(walker, "idle");
   updateForceFlail(walker, deltaSeconds);
   const impactVelocity = walker.forceVelocity.clone();
@@ -481,7 +542,7 @@ function updateForceMotion(walker: NpcWalker, deltaSeconds: number, scene: THREE
   walker.forcePeakY = Math.max(walker.forcePeakY, walker.root.position.y);
 
   if (hitBuilding && getHorizontalSpeed(impactVelocity) > 12) {
-    shatterNpc(walker, scene, debrisPieces, impactVelocity);
+    shatterNpc(walker, scene, debrisPieces, impactVelocity, onShatter);
     return;
   }
 
@@ -493,7 +554,7 @@ function updateForceMotion(walker: NpcWalker, deltaSeconds: number, scene: THREE
   if (walker.root.position.y <= 0.18) {
     walker.root.position.y = 0.18;
     if (walker.forcePeakY > 18 || impactVelocity.y < -18) {
-      shatterNpc(walker, scene, debrisPieces, impactVelocity);
+      shatterNpc(walker, scene, debrisPieces, impactVelocity, onShatter);
       return;
     }
 
@@ -502,7 +563,13 @@ function updateForceMotion(walker: NpcWalker, deltaSeconds: number, scene: THREE
   }
 }
 
-function shatterNpc(walker: NpcWalker, scene: THREE.Scene, debrisPieces: DebrisPiece[], impactVelocity: THREE.Vector3): void {
+function shatterNpc(
+  walker: NpcWalker,
+  scene: THREE.Scene,
+  debrisPieces: DebrisPiece[],
+  impactVelocity: THREE.Vector3,
+  onShatter?: () => void,
+): void {
   if (walker.shattered) {
     return;
   }
@@ -510,9 +577,36 @@ function shatterNpc(walker: NpcWalker, scene: THREE.Scene, debrisPieces: DebrisP
   walker.shattered = true;
   walker.forceHeld = false;
   walker.forceVelocity.set(0, 0, 0);
+  walker.respawnTime = 7;
   walker.mixer?.stopAllAction();
   walker.root.visible = false;
   debrisPieces.push(...createDebrisFromObject(scene, walker.root, impactVelocity));
+  onShatter?.();
+}
+
+function updateNpcRespawn(walker: NpcWalker, deltaSeconds: number): void {
+  walker.respawnTime -= deltaSeconds;
+
+  if (walker.respawnTime > 0) {
+    return;
+  }
+
+  const startNode = getNode(walker.config.startNode);
+  const initialChoice = chooseNextNode(walker.config.startNode, undefined, walker.config.seed);
+  walker.root.position.set(startNode.x, 0.18, startNode.z);
+  walker.root.rotation.y = 0;
+  walker.root.visible = true;
+  walker.shattered = false;
+  walker.forceHeld = false;
+  walker.forceVelocity.set(0, 0, 0);
+  walker.forcePeakY = 0.18;
+  walker.currentNode = walker.config.startNode;
+  walker.targetNode = initialChoice.nodeId;
+  walker.seed = initialChoice.seed;
+  walker.state = "pausing";
+  walker.stateTime = 0.7 + (walker.config.seed % 4) * 0.35;
+  walker.idleAction?.reset().play();
+  walker.currentAction = walker.idleAction;
 }
 
 function getHorizontalSpeed(velocity: THREE.Vector3): number {

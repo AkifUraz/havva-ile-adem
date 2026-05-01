@@ -21,6 +21,7 @@ export class CitySandboxApp {
   private forcePowerController?: ForcePowerController;
   private npcSystem?: NpcSystem;
   private carTrafficSystem?: CarTrafficSystem;
+  private isPanicActive = false;
   private isDisposed = false;
   private animationId = 0;
 
@@ -39,7 +40,7 @@ export class CitySandboxApp {
     window.addEventListener("beforeunload", this.dispose);
 
     await createCity(this.scene, this.renderer);
-    void createCarTrafficSystem(this.scene)
+    void createCarTrafficSystem(this.scene, this.triggerPanic)
       .then((carTrafficSystem) => {
         if (this.isDisposed) {
           carTrafficSystem.dispose();
@@ -47,12 +48,13 @@ export class CitySandboxApp {
         }
 
         this.carTrafficSystem = carTrafficSystem;
+        carTrafficSystem.setPanic(this.isPanicActive);
       })
       .catch((error: unknown) => {
         console.error("Could not load traffic cars", error);
       });
 
-    void createNpcSystem(this.scene)
+    void createNpcSystem(this.scene, this.triggerPanic)
       .then((npcSystem) => {
         if (this.isDisposed) {
           npcSystem.dispose();
@@ -60,6 +62,7 @@ export class CitySandboxApp {
         }
 
         this.npcSystem = npcSystem;
+        npcSystem.setPanic(this.isPanicActive);
       })
       .catch((error: unknown) => {
         console.error("Could not load wandering NPCs", error);
@@ -125,7 +128,7 @@ export class CitySandboxApp {
       this.controller.getPosition(this.playerPosition);
     }
     this.forcePowerController?.update(deltaSeconds);
-    this.carTrafficSystem?.update(deltaSeconds);
+    this.carTrafficSystem?.update(deltaSeconds, this.controller ? this.playerPosition : undefined);
     this.npcSystem?.update(deltaSeconds, this.controller ? this.playerPosition : undefined);
     this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
     this.renderer.render(this.scene, this.camera);
@@ -138,6 +141,12 @@ export class CitySandboxApp {
     this.camera.aspect = width / Math.max(height, 1);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+  };
+
+  private readonly triggerPanic = (): void => {
+    this.isPanicActive = true;
+    this.npcSystem?.setPanic(true);
+    this.carTrafficSystem?.setPanic(true);
   };
 
   private readonly dispose = (): void => {

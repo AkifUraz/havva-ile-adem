@@ -6,6 +6,8 @@ export interface DebrisPiece {
   velocity: THREE.Vector3;
   angularVelocity: THREE.Vector3;
   radius: number;
+  age: number;
+  lifetime: number;
 }
 
 const gravity = 28;
@@ -44,16 +46,27 @@ export function createDebrisFromObject(scene: THREE.Scene, source: THREE.Object3
       velocity: impactVelocity.clone().multiplyScalar(0.32).addScaledVector(outward, 9 + Math.random() * 7).add(new THREE.Vector3(0, 8 + Math.random() * 7, 0)),
       angularVelocity: new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(9),
       radius: Math.max(0.35, Math.min(2.5, new THREE.Box3().setFromObject(piece).getSize(new THREE.Vector3()).length() * 0.18)),
+      age: 0,
+      lifetime: 7 + Math.random() * 3,
     });
   });
 
   return pieces;
 }
 
-export function updateDebrisPieces(pieces: DebrisPiece[], deltaSeconds: number): void {
-  pieces.forEach((piece) => {
+export function updateDebrisPieces(scene: THREE.Scene, pieces: DebrisPiece[], deltaSeconds: number): void {
+  for (let index = pieces.length - 1; index >= 0; index -= 1) {
+    const piece = pieces[index];
+    piece.age += deltaSeconds;
+
+    if (piece.age >= piece.lifetime) {
+      scene.remove(piece.object);
+      pieces.splice(index, 1);
+      continue;
+    }
+
     if (piece.velocity.lengthSq() < 0.01 && piece.object.position.y <= 0.12) {
-      return;
+      continue;
     }
 
     piece.velocity.y -= gravity * deltaSeconds;
@@ -74,7 +87,7 @@ export function updateDebrisPieces(pieces: DebrisPiece[], deltaSeconds: number):
         piece.angularVelocity.set(0, 0, 0);
       }
     }
-  });
+  }
 }
 
 export function disposeDebris(scene: THREE.Scene, pieces: DebrisPiece[]): void {
