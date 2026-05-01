@@ -44,6 +44,8 @@ export class ThirdPersonController {
   private activePointerId: number | null = null;
   private lastPointerX = 0;
   private lastPointerY = 0;
+  private movementInputSignature = "";
+  private movementYawBase = 0;
   private readonly playerRadius = 1.05;
   private readonly speed = 18;
   private readonly cameraDistance = 7.2;
@@ -81,14 +83,25 @@ export class ThirdPersonController {
     const forward = Number(this.pressed.has("KeyW") || this.pressed.has("ArrowUp")) - Number(this.pressed.has("KeyS") || this.pressed.has("ArrowDown"));
     const strafe = Number(this.pressed.has("KeyD") || this.pressed.has("ArrowRight")) - Number(this.pressed.has("KeyA") || this.pressed.has("ArrowLeft"));
     const isMoving = forward !== 0 || strafe !== 0;
+    const inputSignature = `${strafe}:${forward}`;
 
     this.movement.set(0, 0, 0);
 
     if (isMoving) {
+      if (inputSignature !== this.movementInputSignature) {
+        this.movementInputSignature = inputSignature;
+        this.movementYawBase = this.yaw;
+      }
+
       this.movement.set(strafe, 0, -forward).normalize();
-      this.movement.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
-      this.character.rotation.y = Math.atan2(this.movement.x, this.movement.z) + Math.PI;
+      this.movement.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.movementYawBase);
+      const targetYaw = Math.atan2(-this.movement.x, -this.movement.z);
+      this.character.rotation.y = targetYaw;
+      this.yaw = lerpAngle(this.yaw, targetYaw, 1 - Math.exp(-deltaSeconds * 8));
       this.movement.multiplyScalar(this.speed * deltaSeconds);
+    } else {
+      this.movementInputSignature = "";
+      this.movementYawBase = this.yaw;
     }
 
     this.moveAxis(this.movement.x, 0);
@@ -374,4 +387,9 @@ function normalizeCharacterModel(source: THREE.Group): THREE.Group {
 
   wrapper.add(model);
   return wrapper;
+}
+
+function lerpAngle(from: number, to: number, amount: number): number {
+  const delta = THREE.MathUtils.euclideanModulo(to - from + Math.PI, Math.PI * 2) - Math.PI;
+  return from + delta * amount;
 }
