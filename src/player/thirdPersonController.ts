@@ -13,7 +13,8 @@ interface ThirdPersonControllerOptions {
 }
 
 const moveKeys = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"]);
-const characterUrl = "/assets/characters/character-l.glb";
+const characterId = "h";
+const characterUrl = `/assets/npcs/character-${characterId}.glb`;
 
 export class ThirdPersonController {
   private readonly camera: THREE.PerspectiveCamera;
@@ -177,8 +178,8 @@ export class ThirdPersonController {
   private async loadCharacterModel(): Promise<void> {
     const loadingManager = new THREE.LoadingManager();
     loadingManager.setURLModifier((url) => {
-      if (url.endsWith("Textures/texture-l.png")) {
-        return "/assets/characters/Textures/texture-l.png";
+      if (url.endsWith(`Textures/texture-${characterId}.png`)) {
+        return `/assets/npcs/Textures/texture-${characterId}.png`;
       }
 
       return url;
@@ -193,7 +194,7 @@ export class ThirdPersonController {
       this.character.add(model);
       this.setupAnimation(model, gltf.animations);
     } catch (error) {
-      console.error("Could not load character-l.glb", error);
+      console.error(`Could not load character-${characterId}.glb`, error);
     }
   }
 
@@ -295,7 +296,7 @@ function createPlaceholderCharacter(): THREE.Group {
 function normalizeCharacterModel(source: THREE.Group): THREE.Group {
   const model = source.clone(true);
   const wrapper = new THREE.Group();
-  wrapper.name = "character-l-model";
+  wrapper.name = `character-${characterId}-model`;
 
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
