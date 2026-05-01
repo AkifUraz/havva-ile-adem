@@ -38,7 +38,7 @@ export class ThirdPersonController {
   private yaw = 0;
   private pitch = -0.18;
   private isLocked = false;
-  private readonly playerRadius = 2.1;
+  private readonly playerRadius = 1.05;
   private readonly speed = 18;
   private readonly cameraDistance = 17;
   private readonly cameraHeight = 8.6;

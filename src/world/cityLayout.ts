@@ -58,8 +58,8 @@ export const cityBlocks: CityBlock[] = centers.flatMap((z, row) =>
 );
 
 export const buildingColliders: ColliderRect[] = cityBlocks.map((block) => ({
-  minX: block.x - blockSize * 0.45,
-  maxX: block.x + blockSize * 0.45,
-  minZ: block.z - blockSize * 0.45,
-  maxZ: block.z + blockSize * 0.45,
+  minX: block.x - blockSize * 0.34,
+  maxX: block.x + blockSize * 0.34,
+  minZ: block.z - blockSize * 0.34,
+  maxZ: block.z + blockSize * 0.34,
 }));

@@ -22,11 +22,72 @@ export interface NpcSystem {
 }
 
 const npcRoutes: NpcRoute[] = [
-  { characterId: "b", speed: 8.5, points: [{ x: -7, z: 72 }, { x: -7, z: 20 }] },
-  { characterId: "d", speed: 7.8, points: [{ x: 46, z: 72 }, { x: 46, z: -42 }] },
-  { characterId: "h", speed: 8.2, points: [{ x: -54, z: 0 }, { x: 54, z: 0 }] },
-  { characterId: "n", speed: 7.4, points: [{ x: -46, z: -36 }, { x: -46, z: 72 }] },
-  { characterId: "q", speed: 8.8, points: [{ x: 9, z: 64 }, { x: 9, z: 10 }] },
+  {
+    characterId: "b",
+    speed: 3.45,
+    points: [
+      { x: -9, z: 82 },
+      { x: 36, z: 82 },
+      { x: 36, z: 48 },
+      { x: 82, z: 48 },
+      { x: 82, z: 4 },
+      { x: 36, z: 4 },
+      { x: -9, z: 4 },
+    ],
+  },
+  {
+    characterId: "d",
+    speed: 3.1,
+    points: [
+      { x: 54, z: 86 },
+      { x: 54, z: 42 },
+      { x: 8, z: 42 },
+      { x: 8, z: -4 },
+      { x: 54, z: -4 },
+      { x: 54, z: -48 },
+    ],
+  },
+  {
+    characterId: "h",
+    speed: 3.3,
+    points: [
+      { x: -84, z: 8 },
+      { x: -42, z: 8 },
+      { x: -42, z: 52 },
+      { x: 4, z: 52 },
+      { x: 4, z: 8 },
+      { x: 48, z: 8 },
+      { x: 48, z: -38 },
+      { x: 4, z: -38 },
+      { x: -42, z: -38 },
+      { x: -84, z: -38 },
+    ],
+  },
+  {
+    characterId: "n",
+    speed: 2.95,
+    points: [
+      { x: -54, z: -84 },
+      { x: -54, z: -40 },
+      { x: -8, z: -40 },
+      { x: -8, z: 6 },
+      { x: -54, z: 6 },
+      { x: -54, z: 50 },
+    ],
+  },
+  {
+    characterId: "q",
+    speed: 3.6,
+    points: [
+      { x: 10, z: 66 },
+      { x: -36, z: 66 },
+      { x: -36, z: 20 },
+      { x: -82, z: 20 },
+      { x: -82, z: -24 },
+      { x: -36, z: -24 },
+      { x: 10, z: -24 },
+    ],
+  },
 ];
 
 export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
@@ -47,7 +108,7 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
       const mixer = new THREE.AnimationMixer(root);
       const walkClip = THREE.AnimationClip.findByName(gltf.animations, "walk");
       const walkAction = walkClip ? mixer.clipAction(walkClip) : undefined;
-      walkAction?.setEffectiveTimeScale(0.95 + route.speed / 18).play();
+      walkAction?.setEffectiveTimeScale(0.68 + route.speed / 18).play();
 
       scene.add(root);
 
@@ -90,7 +151,7 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number): void {
 
   if (distance < 0.4) {
     walker.targetIndex = (walker.targetIndex + 1) % walker.route.points.length;
-    walker.pauseTime = 0.6 + (walker.route.characterId.charCodeAt(0) % 4) * 0.18;
+    walker.pauseTime = 1.2 + (walker.route.characterId.charCodeAt(0) % 4) * 0.22;
     return;
   }
 
