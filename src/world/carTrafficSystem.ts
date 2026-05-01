@@ -12,6 +12,7 @@ interface TrafficCar {
   root: THREE.Group;
   route: TrafficRoute;
   targetIndex: number;
+  wheels: THREE.Object3D[];
 }
 
 export interface CarTrafficSystem {
@@ -23,7 +24,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "sedan",
     speed: 9.5,
-    length: 8.4,
+    length: 10.2,
     points: [
       { x: -106, z: -4.5 },
       { x: -46, z: -4.5 },
@@ -35,7 +36,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "taxi",
     speed: 8.8,
-    length: 8.2,
+    length: 10,
     points: [
       { x: 106, z: 4.5 },
       { x: 46, z: 4.5 },
@@ -47,7 +48,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "van",
     speed: 7.4,
-    length: 8.8,
+    length: 10.7,
     points: [
       { x: -50.5, z: 106 },
       { x: -50.5, z: 46 },
@@ -59,7 +60,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "suv",
     speed: 8.1,
-    length: 8.4,
+    length: 10.2,
     points: [
       { x: 50.5, z: -106 },
       { x: 50.5, z: -46 },
@@ -71,7 +72,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "delivery",
     speed: 6.5,
-    length: 9.6,
+    length: 11.5,
     points: [
       { x: -106, z: 41.5 },
       { x: -46, z: 41.5 },
@@ -102,6 +103,7 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
         root,
         route,
         targetIndex: 1,
+        wheels: collectWheels(root),
       };
     }),
   );
@@ -135,6 +137,7 @@ function updateCar(car: TrafficCar, deltaSeconds: number): void {
   car.root.position.x += directionX * step;
   car.root.position.z += directionZ * step;
   car.root.rotation.y = getHeadingYaw(directionX, directionZ);
+  spinWheels(car.wheels, step);
 }
 
 function faceNextPoint(root: THREE.Group, current: { x: number; z: number }, next: { x: number; z: number }): void {
@@ -143,6 +146,22 @@ function faceNextPoint(root: THREE.Group, current: { x: number; z: number }, nex
 
 function getHeadingYaw(directionX: number, directionZ: number): number {
   return Math.atan2(directionX, directionZ);
+}
+
+function collectWheels(root: THREE.Object3D): THREE.Object3D[] {
+  const wheels: THREE.Object3D[] = [];
+  root.traverse((object) => {
+    if (/wheel/i.test(object.name)) {
+      wheels.push(object);
+    }
+  });
+  return wheels;
+}
+
+function spinWheels(wheels: THREE.Object3D[], distance: number): void {
+  wheels.forEach((wheel) => {
+    wheel.rotation.x -= distance * 1.8;
+  });
 }
 
 function normalizeCarModel(source: THREE.Group, targetLength: number): THREE.Group {
