@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { cityBounds } from "./cityLayout";
 import { keepOutOfBuildings } from "./collisionUtils";
 import { createDebrisFromObject, disposeDebris, type DebrisPiece, updateDebrisPieces } from "./debrisSystem";
+import { resolveAssetUrl } from "./assetResolver";
 import type { ForceTarget } from "./forceTarget";
 
 interface TrafficRoute {
@@ -107,13 +108,13 @@ const trafficRoutes: TrafficRoute[] = [
 export async function createCarTrafficSystem(scene: THREE.Scene, onShatter?: () => void): Promise<CarTrafficSystem> {
   const loadingManager = new THREE.LoadingManager();
   loadingManager.setURLModifier((url) => {
-    return url.endsWith("Textures/colormap.png") ? "/assets/cars/Textures/colormap.png" : url;
+    return url.endsWith("Textures/colormap.png") ? resolveAssetUrl("/assets/cars/Textures/colormap.png") : url;
   });
 
   const loader = new GLTFLoader(loadingManager);
   const cars = await Promise.all(
     trafficRoutes.map(async (route) => {
-      const gltf = await loader.loadAsync(`/assets/cars/${route.assetId}.glb`);
+      const gltf = await loader.loadAsync(resolveAssetUrl(`/assets/cars/${route.assetId}.glb`));
       const root = normalizeCarModel(gltf.scene, route.length);
       const firstPoint = route.points[0];
       root.position.set(firstPoint.x, 0.2, firstPoint.z);

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { AssetCatalogEntry } from "./assetCatalog";
 import { assetCatalog, assetsById } from "./assetCatalog";
+import { resolveAssetUrl } from "./assetResolver";
 import { blockSize, cityBlocks, getBuildingHeight, roadWidth } from "./cityLayout";
 
 interface LoadedAsset {
@@ -12,7 +13,7 @@ interface LoadedAsset {
 const loadingManager = new THREE.LoadingManager();
 loadingManager.setURLModifier((url) => {
   if (url.endsWith("Textures/colormap.png")) {
-    return "/assets/city/Textures/colormap.png";
+    return resolveAssetUrl("/assets/city/Textures/colormap.png");
   }
 
   return url;
@@ -58,7 +59,7 @@ async function loadRequiredAssets(): Promise<LoadedAsset[]> {
         throw new Error(`Missing city asset: ${assetId}`);
       }
 
-      const gltf = await loader.loadAsync(entry.url);
+      const gltf = await loader.loadAsync(resolveAssetUrl(entry.url));
       return { entry, scene: gltf.scene };
     }),
   );

@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CityBounds, ColliderRect } from "../world/cityLayout";
 import type { TrafficCollider } from "../world/carTrafficSystem";
 import type { NpcCollider } from "../world/npcSystem";
+import { resolveAssetUrl } from "../world/assetResolver";
 
 interface ThirdPersonControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -336,7 +337,7 @@ export class ThirdPersonController {
     const loadingManager = new THREE.LoadingManager();
     loadingManager.setURLModifier((url) => {
       if (url.endsWith(`Textures/texture-${characterId}.png`)) {
-        return characterTextureUrl;
+        return resolveAssetUrl(characterTextureUrl);
       }
 
       return url;
@@ -344,7 +345,7 @@ export class ThirdPersonController {
     const loader = new GLTFLoader(loadingManager);
 
     try {
-      const gltf = await loader.loadAsync(characterUrl);
+      const gltf = await loader.loadAsync(resolveAssetUrl(characterUrl));
       const model = normalizeCharacterModel(gltf.scene);
 
       this.character.remove(this.placeholder);

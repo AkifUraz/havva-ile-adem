@@ -3,6 +3,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { buildingColliders, cityBounds, type ColliderRect } from "./cityLayout";
 import { keepOutOfBuildings } from "./collisionUtils";
 import { createDebrisFromObject, disposeDebris, type DebrisPiece, updateDebrisPieces } from "./debrisSystem";
+import { resolveAssetUrl } from "./assetResolver";
 import type { ForceTarget } from "./forceTarget";
 
 type NpcState = "walking" | "pausing" | "lookingAround";
@@ -83,13 +84,13 @@ export async function createNpcSystem(scene: THREE.Scene, onShatter?: () => void
   loadingManager.setURLModifier((url) => {
     const match = url.match(/Textures\/(texture-[a-z]\.png)$/i);
     const textureFile = match ? npcTextureMap[match[1]] : undefined;
-    return textureFile ? `/assets/npcs/Textures/${textureFile}` : url;
+    return textureFile ? resolveAssetUrl(`/assets/npcs/Textures/${textureFile}`) : url;
   });
 
   const loader = new GLTFLoader(loadingManager);
   const walkers = await Promise.all(
     npcConfigs.map(async (config) => {
-      const gltf = await loader.loadAsync(`/assets/npcs/character-${config.characterId}.glb`);
+      const gltf = await loader.loadAsync(resolveAssetUrl(`/assets/npcs/character-${config.characterId}.glb`));
       const root = normalizeNpcModel(gltf.scene);
       const startNode = getNode(config.startNode);
       const initialChoice = chooseNextNode(config.startNode, undefined, config.seed);
