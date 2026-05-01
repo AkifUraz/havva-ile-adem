@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CityBounds, ColliderRect } from "../world/cityLayout";
+import type { TrafficCollider } from "../world/carTrafficSystem";
 
 interface ThirdPersonControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -9,6 +10,7 @@ interface ThirdPersonControllerOptions {
   lockElement: HTMLElement;
   bounds: CityBounds;
   colliders: ColliderRect[];
+  getTrafficColliders?: () => TrafficCollider[];
   onLockChange?: (isLocked: boolean) => void;
 }
 
@@ -24,6 +26,7 @@ export class ThirdPersonController {
   private readonly lockElement: HTMLElement;
   private readonly bounds: CityBounds;
   private readonly colliders: ColliderRect[];
+  private readonly getTrafficColliders?: () => TrafficCollider[];
   private readonly onLockChange?: (isLocked: boolean) => void;
   private readonly pressed = new Set<string>();
   private readonly character = new THREE.Group();
@@ -58,6 +61,7 @@ export class ThirdPersonController {
     this.lockElement = options.lockElement;
     this.bounds = options.bounds;
     this.colliders = options.colliders;
+    this.getTrafficColliders = options.getTrafficColliders;
     this.onLockChange = options.onLockChange;
 
     this.character.name = "third-person-character";
@@ -213,7 +217,7 @@ export class ThirdPersonController {
     this.nextPosition.x = THREE.MathUtils.clamp(this.nextPosition.x + deltaX, this.bounds.minX, this.bounds.maxX);
     this.nextPosition.z = THREE.MathUtils.clamp(this.nextPosition.z + deltaZ, this.bounds.minZ, this.bounds.maxZ);
 
-    if (!this.intersectsBuilding(this.nextPosition.x, this.nextPosition.z)) {
+    if (!this.intersectsBuilding(this.nextPosition.x, this.nextPosition.z) && !this.intersectsTraffic(this.nextPosition.x, this.nextPosition.z)) {
       this.character.position.copy(this.nextPosition);
     }
   }
@@ -226,6 +230,16 @@ export class ThirdPersonController {
         z > collider.minZ - this.playerRadius &&
         z < collider.maxZ + this.playerRadius,
     );
+  }
+
+  private intersectsTraffic(x: number, z: number): boolean {
+    return this.getTrafficColliders?.().some((collider) => {
+      const dx = x - collider.x;
+      const dz = z - collider.z;
+      const along = dx * Math.sin(collider.yaw) + dz * Math.cos(collider.yaw);
+      const across = dx * Math.cos(collider.yaw) - dz * Math.sin(collider.yaw);
+      return Math.abs(along) < collider.halfLength + this.playerRadius && Math.abs(across) < collider.halfWidth + this.playerRadius;
+    }) ?? false;
   }
 
   private updateCamera(deltaSeconds: number): void {

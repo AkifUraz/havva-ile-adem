@@ -70,6 +70,7 @@ export class CitySandboxApp {
       lockElement: this.hud.lockButton,
       bounds: cityBounds,
       colliders: buildingColliders,
+      getTrafficColliders: () => this.carTrafficSystem?.getColliders() ?? [],
       onLockChange: (isLocked) => this.hud.setLocked(isLocked),
     });
 

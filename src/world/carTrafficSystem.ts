@@ -15,8 +15,17 @@ interface TrafficCar {
   wheels: THREE.Object3D[];
 }
 
+export interface TrafficCollider {
+  x: number;
+  z: number;
+  yaw: number;
+  halfLength: number;
+  halfWidth: number;
+}
+
 export interface CarTrafficSystem {
   update(deltaSeconds: number): void;
+  getColliders(): TrafficCollider[];
   dispose(): void;
 }
 
@@ -111,6 +120,15 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
   return {
     update(deltaSeconds: number) {
       cars.forEach((car) => updateCar(car, deltaSeconds));
+    },
+    getColliders() {
+      return cars.map((car) => ({
+        x: car.root.position.x,
+        z: car.root.position.z,
+        yaw: car.root.rotation.y,
+        halfLength: car.route.length * 0.5,
+        halfWidth: car.route.length * 0.23,
+      }));
     },
     dispose() {
       cars.forEach((car) => scene.remove(car.root));
