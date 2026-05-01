@@ -90,11 +90,20 @@ const npcRoutes: NpcRoute[] = [
   },
 ];
 
+const npcTextureMap: Record<string, string> = {
+  "texture-b.png": "doku-a.png",
+  "texture-d.png": "doku-b.png",
+  "texture-h.png": "doku-c.png",
+  "texture-n.png": "doku-e.png",
+  "texture-q.png": "doku-f.png",
+};
+
 export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
   const loadingManager = new THREE.LoadingManager();
   loadingManager.setURLModifier((url) => {
     const match = url.match(/Textures\/(texture-[a-z]\.png)$/i);
-    return match ? `/assets/npcs/Textures/${match[1]}` : url;
+    const textureFile = match ? npcTextureMap[match[1]] : undefined;
+    return textureFile ? `/assets/npcs/Textures/${textureFile}` : url;
   });
 
   const loader = new GLTFLoader(loadingManager);
