@@ -129,6 +129,10 @@ export class ThirdPersonController {
     return `${x.toFixed(1)}, ${z.toFixed(1)}`;
   }
 
+  getPosition(target: THREE.Vector3): THREE.Vector3 {
+    return target.copy(this.character.position);
+  }
+
   private readonly requestLock = (): void => {
     if (document.pointerLockElement !== this.domElement) {
       void this.domElement.requestPointerLock();

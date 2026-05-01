@@ -35,11 +35,12 @@ interface NpcWalker {
 }
 
 export interface NpcSystem {
-  update(deltaSeconds: number): void;
+  update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
   dispose(): void;
 }
 
 const npcRadius = 0.9;
+const playerStopRadius = 4.2;
 const walkGraph = createWalkGraph();
 const npcConfigs: NpcConfig[] = [
   { characterId: "b", startNode: "-56:88", speed: 2.45, seed: 11 },
@@ -102,8 +103,8 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
   );
 
   return {
-    update(deltaSeconds: number) {
-      walkers.forEach((walker) => updateWalker(walker, deltaSeconds));
+    update(deltaSeconds: number, playerPosition?: THREE.Vector3) {
+      walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition));
     },
     dispose() {
       walkers.forEach((walker) => {
@@ -114,8 +115,13 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
   };
 }
 
-function updateWalker(walker: NpcWalker, deltaSeconds: number): void {
+function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition?: THREE.Vector3): void {
   walker.mixer?.update(deltaSeconds);
+
+  if (playerPosition && isNearPlayer(walker.root.position.x, walker.root.position.z, playerPosition)) {
+    setNpcAnimation(walker, "idle");
+    return;
+  }
 
   if (walker.state === "pausing") {
     updatePause(walker, deltaSeconds);
@@ -127,10 +133,10 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number): void {
     return;
   }
 
-  updateWalking(walker, deltaSeconds);
+  updateWalking(walker, deltaSeconds, playerPosition);
 }
 
-function updateWalking(walker: NpcWalker, deltaSeconds: number): void {
+function updateWalking(walker: NpcWalker, deltaSeconds: number, playerPosition?: THREE.Vector3): void {
   setNpcAnimation(walker, "walk");
   const target = getNode(walker.targetNode);
   const dx = target.x - walker.root.position.x;
@@ -148,7 +154,16 @@ function updateWalking(walker: NpcWalker, deltaSeconds: number): void {
   const nextX = walker.root.position.x + directionX * step;
   const nextZ = walker.root.position.z + directionZ * step;
 
-  if (intersectsAnyCollider(nextX, nextZ) || !isSafeSegment(walker.root.position.x, walker.root.position.z, nextX, nextZ)) {
+  if (
+    intersectsAnyCollider(nextX, nextZ) ||
+    !isSafeSegment(walker.root.position.x, walker.root.position.z, nextX, nextZ) ||
+    (playerPosition && isNearPlayer(nextX, nextZ, playerPosition))
+  ) {
+    if (playerPosition && isNearPlayer(nextX, nextZ, playerPosition)) {
+      setNpcAnimation(walker, "idle");
+      return;
+    }
+
     chooseSafeDetour(walker);
     return;
   }
@@ -292,6 +307,10 @@ function intersectsAnyCollider(x: number, z: number): boolean {
 
 function pointIntersectsCollider(x: number, z: number, collider: ColliderRect): boolean {
   return x > collider.minX - npcRadius && x < collider.maxX + npcRadius && z > collider.minZ - npcRadius && z < collider.maxZ + npcRadius;
+}
+
+function isNearPlayer(x: number, z: number, playerPosition: THREE.Vector3): boolean {
+  return Math.hypot(x - playerPosition.x, z - playerPosition.z) < playerStopRadius;
 }
 
 function isSafeSegment(startX: number, startZ: number, endX: number, endZ: number): boolean {

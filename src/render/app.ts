@@ -15,6 +15,7 @@ export class CitySandboxApp {
   private readonly camera = new THREE.PerspectiveCamera(68, 1, 0.1, 700);
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   private readonly clock = new THREE.Clock();
+  private readonly playerPosition = new THREE.Vector3();
   private controller?: ThirdPersonController;
   private npcSystem?: NpcSystem;
   private carTrafficSystem?: CarTrafficSystem;
@@ -109,8 +110,11 @@ export class CitySandboxApp {
   private readonly animate = (): void => {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
     this.carTrafficSystem?.update(deltaSeconds);
-    this.npcSystem?.update(deltaSeconds);
     this.controller?.update(deltaSeconds);
+    if (this.controller) {
+      this.controller.getPosition(this.playerPosition);
+    }
+    this.npcSystem?.update(deltaSeconds, this.controller ? this.playerPosition : undefined);
     this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
     this.renderer.render(this.scene, this.camera);
     this.animationId = window.requestAnimationFrame(this.animate);
