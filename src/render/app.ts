@@ -3,6 +3,8 @@ import { ThirdPersonController } from "../player/thirdPersonController";
 import type { HudController } from "../ui/hud";
 import { buildingColliders, cityBounds } from "../world/cityLayout";
 import { createCity } from "../world/createCity";
+import type { NpcSystem } from "../world/npcSystem";
+import { createNpcSystem } from "../world/npcSystem";
 
 export class CitySandboxApp {
   private readonly root: HTMLElement;
@@ -12,6 +14,8 @@ export class CitySandboxApp {
   private readonly renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
   private readonly clock = new THREE.Clock();
   private controller?: ThirdPersonController;
+  private npcSystem?: NpcSystem;
+  private isDisposed = false;
   private animationId = 0;
 
   constructor(root: HTMLElement, hud: HudController) {
@@ -29,6 +33,18 @@ export class CitySandboxApp {
     window.addEventListener("beforeunload", this.dispose);
 
     await createCity(this.scene, this.renderer);
+    void createNpcSystem(this.scene)
+      .then((npcSystem) => {
+        if (this.isDisposed) {
+          npcSystem.dispose();
+          return;
+        }
+
+        this.npcSystem = npcSystem;
+      })
+      .catch((error: unknown) => {
+        console.error("Could not load wandering NPCs", error);
+      });
 
     this.controller = new ThirdPersonController({
       camera: this.camera,
@@ -76,6 +92,7 @@ export class CitySandboxApp {
 
   private readonly animate = (): void => {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
+    this.npcSystem?.update(deltaSeconds);
     this.controller?.update(deltaSeconds);
     this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
     this.renderer.render(this.scene, this.camera);
@@ -91,10 +108,12 @@ export class CitySandboxApp {
   };
 
   private readonly dispose = (): void => {
+    this.isDisposed = true;
     window.cancelAnimationFrame(this.animationId);
     window.removeEventListener("resize", this.resize);
     window.removeEventListener("beforeunload", this.dispose);
     this.controller?.dispose();
+    this.npcSystem?.dispose();
     this.renderer.dispose();
   };
 }
