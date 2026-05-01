@@ -21,7 +21,9 @@ interface NpcConfig {
 interface NpcWalker {
   root: THREE.Group;
   mixer?: THREE.AnimationMixer;
+  idleAction?: THREE.AnimationAction;
   walkAction?: THREE.AnimationAction;
+  currentAction?: THREE.AnimationAction;
   config: NpcConfig;
   state: NpcState;
   stateTime: number;
@@ -73,17 +75,21 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
       root.position.set(startNode.x, 0.18, startNode.z);
 
       const mixer = new THREE.AnimationMixer(root);
+      const idleClip = THREE.AnimationClip.findByName(gltf.animations, "idle");
       const walkClip = THREE.AnimationClip.findByName(gltf.animations, "walk");
+      const idleAction = idleClip ? mixer.clipAction(idleClip) : undefined;
       const walkAction = walkClip ? mixer.clipAction(walkClip) : undefined;
-      walkAction?.setEffectiveTimeScale(0.72 + config.speed / 12).play();
-      setWalkingAnimation(walkAction, false);
+      idleAction?.setEffectiveTimeScale(0.95 + random01(config.seed) * 0.15).play();
+      walkAction?.setEffectiveTimeScale(0.72 + config.speed / 12);
 
       scene.add(root);
 
       return {
         root,
         mixer,
+        idleAction,
         walkAction,
+        currentAction: idleAction,
         config,
         state: "pausing" as NpcState,
         stateTime: 0.7 + (config.seed % 4) * 0.35,
@@ -125,7 +131,7 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number): void {
 }
 
 function updateWalking(walker: NpcWalker, deltaSeconds: number): void {
-  setWalkingAnimation(walker.walkAction, true);
+  setNpcAnimation(walker, "walk");
   const target = getNode(walker.targetNode);
   const dx = target.x - walker.root.position.x;
   const dz = target.z - walker.root.position.z;
@@ -153,7 +159,7 @@ function updateWalking(walker: NpcWalker, deltaSeconds: number): void {
 }
 
 function updatePause(walker: NpcWalker, deltaSeconds: number): void {
-  setWalkingAnimation(walker.walkAction, false);
+  setNpcAnimation(walker, "idle");
   walker.stateTime -= deltaSeconds;
 
   if (walker.stateTime > 0) {
@@ -172,7 +178,7 @@ function updatePause(walker: NpcWalker, deltaSeconds: number): void {
 }
 
 function updateLookAround(walker: NpcWalker, deltaSeconds: number): void {
-  setWalkingAnimation(walker.walkAction, false);
+  setNpcAnimation(walker, "idle");
   walker.stateTime -= deltaSeconds;
   walker.root.rotation.y = walker.baseRotation + Math.sin(walker.stateTime * 4.2) * 0.42;
 
@@ -266,13 +272,18 @@ function chooseNextNode(currentNodeId: string, previousNodeId: string | undefine
   return { nodeId, seed: next };
 }
 
-function setWalkingAnimation(action: THREE.AnimationAction | undefined, isWalking: boolean): void {
-  if (!action) {
+function setNpcAnimation(walker: NpcWalker, animation: "idle" | "walk"): void {
+  const nextAction = animation === "walk" ? walker.walkAction : walker.idleAction;
+
+  if (!nextAction || nextAction === walker.currentAction) {
     return;
   }
 
-  action.enabled = true;
-  action.paused = !isWalking;
+  nextAction.enabled = true;
+  nextAction.paused = false;
+  nextAction.reset().fadeIn(0.18).play();
+  walker.currentAction?.fadeOut(0.18);
+  walker.currentAction = nextAction;
 }
 
 function intersectsAnyCollider(x: number, z: number): boolean {
