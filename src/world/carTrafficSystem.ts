@@ -48,7 +48,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "van",
     speed: 7.4,
-    length: 10.7,
+    length: 12.2,
     points: [
       { x: -50.5, z: 106 },
       { x: -50.5, z: 46 },
@@ -72,7 +72,7 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "delivery",
     speed: 6.5,
-    length: 11.5,
+    length: 13.4,
     points: [
       { x: -106, z: 41.5 },
       { x: -46, z: 41.5 },
