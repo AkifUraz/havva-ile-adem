@@ -151,7 +151,7 @@ function getHeadingYaw(directionX: number, directionZ: number): number {
 function collectWheels(root: THREE.Object3D): THREE.Object3D[] {
   const wheels: THREE.Object3D[] = [];
   root.traverse((object) => {
-    if (/wheel/i.test(object.name)) {
+    if (/wheel-(front|back)-(left|right)/i.test(object.name)) {
       wheels.push(object);
     }
   });
