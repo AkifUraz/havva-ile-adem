@@ -124,8 +124,8 @@ function createCityBlocks(city: THREE.Group, loadedById: Map<string, LoadedAsset
     }
 
     const isSkyscraper = loaded.entry.category === "skyscraper";
-    const targetHeight = isSkyscraper ? 48 * block.scale : 34 * block.scale;
-    const building = instantiateAsset(loaded.scene, blockSize * 0.9, targetHeight);
+    const targetHeight = isSkyscraper ? 52 * block.scale : 37 * block.scale;
+    const building = instantiateAsset(loaded.scene, blockSize * 0.95, targetHeight);
     building.name = `city-block-${block.assetId}`;
     building.position.set(block.x, 0.18, block.z);
     building.rotation.y = block.rotationY;

@@ -45,10 +45,12 @@ export class ThirdPersonController {
   private idleAction?: THREE.AnimationAction;
   private walkAction?: THREE.AnimationAction;
   private currentAction?: THREE.AnimationAction;
+  private visualRoot?: THREE.Object3D;
   private leftArm?: THREE.Object3D;
   private rightArm?: THREE.Object3D;
   private placeholderWalkTime = 0;
   private forcePoseAmount = 0;
+  private flightPoseAmount = 0;
   private wantsForcePose = false;
   private yaw = 0;
   private pitch = -0.22;
@@ -65,7 +67,7 @@ export class ThirdPersonController {
   private readonly cameraDistance = 7.2;
   private readonly cameraHeight = 6.7;
   private readonly groundY = 0.18;
-  private readonly maxFlightY = 18;
+  private readonly maxFlightY = 32;
 
   constructor(options: ThirdPersonControllerOptions) {
     this.camera = options.camera;
@@ -79,6 +81,7 @@ export class ThirdPersonController {
     this.onLockChange = options.onLockChange;
 
     this.character.name = "third-person-character";
+    this.visualRoot = this.placeholder;
     this.character.add(this.placeholder);
     this.character.position.set(0, 0.18, 88);
     this.character.rotation.y = this.yaw;
@@ -329,6 +332,7 @@ export class ThirdPersonController {
 
       this.character.remove(this.placeholder);
       this.character.add(model);
+      this.visualRoot = model;
       this.leftArm = model.getObjectByName("arm-left");
       this.rightArm = model.getObjectByName("arm-right");
       this.setupAnimation(model, gltf.animations);
@@ -367,7 +371,7 @@ export class ThirdPersonController {
       }
 
       this.mixer.update(deltaSeconds);
-      this.updateForcePose(deltaSeconds);
+      this.updateVisualPose(deltaSeconds);
       return;
     }
 
@@ -375,21 +379,30 @@ export class ThirdPersonController {
     const sway = Math.sin(this.placeholderWalkTime);
     this.placeholder.position.y = isMoving ? Math.abs(sway) * 0.18 : Math.sin(this.placeholderWalkTime) * 0.04;
     this.placeholder.rotation.z = isMoving ? sway * 0.08 : 0;
-    this.updateForcePose(deltaSeconds);
+    this.updateVisualPose(deltaSeconds);
   }
 
-  private updateForcePose(deltaSeconds: number): void {
+  private updateVisualPose(deltaSeconds: number): void {
     const targetAmount = this.wantsForcePose ? 1 : 0;
     this.forcePoseAmount = THREE.MathUtils.lerp(this.forcePoseAmount, targetAmount, 1 - Math.exp(-deltaSeconds * 12));
-    const amount = this.forcePoseAmount;
+    const flightTarget = THREE.MathUtils.clamp((this.character.position.y - this.groundY) / 9, 0, 1);
+    this.flightPoseAmount = THREE.MathUtils.lerp(this.flightPoseAmount, flightTarget, 1 - Math.exp(-deltaSeconds * 5.4));
+    const forceAmount = this.forcePoseAmount;
+    const flightAmount = this.flightPoseAmount;
+
+    if (this.visualRoot) {
+      this.visualRoot.rotation.x = -1.18 * flightAmount;
+      this.visualRoot.position.y = Math.sin(flightAmount * Math.PI) * 0.35;
+    }
 
     if (this.leftArm && this.rightArm) {
-      this.leftArm.rotation.x = -1.05 * amount;
-      this.leftArm.rotation.y = -0.18 * amount;
-      this.leftArm.rotation.z = 0.48 * amount;
-      this.rightArm.rotation.x = -1.05 * amount;
-      this.rightArm.rotation.y = 0.18 * amount;
-      this.rightArm.rotation.z = -0.48 * amount;
+      const armForward = Math.max(forceAmount, flightAmount);
+      this.leftArm.rotation.x = -1.05 * forceAmount - 0.75 * flightAmount;
+      this.leftArm.rotation.y = -0.18 * forceAmount - 0.12 * flightAmount;
+      this.leftArm.rotation.z = 0.48 * forceAmount + 0.2 * armForward;
+      this.rightArm.rotation.x = -1.05 * forceAmount - 0.75 * flightAmount;
+      this.rightArm.rotation.y = 0.18 * forceAmount + 0.12 * flightAmount;
+      this.rightArm.rotation.z = -0.48 * forceAmount - 0.2 * armForward;
     }
   }
 }
