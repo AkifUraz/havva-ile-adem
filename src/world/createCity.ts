@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { AssetCatalogEntry } from "./assetCatalog";
 import { assetCatalog, assetsById } from "./assetCatalog";
-import { blockSize, cityBlocks, roadWidth } from "./cityLayout";
+import { blockSize, cityBlocks, getBuildingHeight, roadWidth } from "./cityLayout";
 
 interface LoadedAsset {
   entry: AssetCatalogEntry;
@@ -123,9 +123,7 @@ function createCityBlocks(city: THREE.Group, loadedById: Map<string, LoadedAsset
       return;
     }
 
-    const isSkyscraper = loaded.entry.category === "skyscraper";
-    const targetHeight = isSkyscraper ? 52 * block.scale : 37 * block.scale;
-    const building = instantiateAsset(loaded.scene, blockSize * 0.95, targetHeight);
+    const building = instantiateAsset(loaded.scene, blockSize * 0.95, getBuildingHeight(block));
     building.name = `city-block-${block.assetId}`;
     building.position.set(block.x, 0.18, block.z);
     building.rotation.y = block.rotationY;

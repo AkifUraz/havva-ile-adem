@@ -19,6 +19,7 @@ export interface ColliderRect {
   maxX: number;
   minZ: number;
   maxZ: number;
+  maxY: number;
 }
 
 export const blockSize = 28;
@@ -57,9 +58,14 @@ export const cityBlocks: CityBlock[] = centers.flatMap((z, row) =>
   })),
 );
 
+export function getBuildingHeight(block: CityBlock): number {
+  return (block.assetId.includes("skyscraper") ? 52 : 37) * block.scale;
+}
+
 export const buildingColliders: ColliderRect[] = cityBlocks.map((block) => ({
   minX: block.x - blockSize * 0.43,
   maxX: block.x + blockSize * 0.43,
   minZ: block.z - blockSize * 0.43,
   maxZ: block.z + blockSize * 0.43,
+  maxY: 0.18 + getBuildingHeight(block),
 }));

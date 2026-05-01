@@ -67,7 +67,7 @@ export class ThirdPersonController {
   private readonly cameraDistance = 7.2;
   private readonly cameraHeight = 6.7;
   private readonly groundY = 0.18;
-  private readonly maxFlightY = 32;
+  private readonly maxFlightY = 72;
 
   constructor(options: ThirdPersonControllerOptions) {
     this.camera = options.camera;
@@ -240,7 +240,7 @@ export class ThirdPersonController {
     this.nextPosition.z = THREE.MathUtils.clamp(this.nextPosition.z + deltaZ, this.bounds.minZ, this.bounds.maxZ);
 
     if (
-      !this.intersectsBuilding(this.nextPosition.x, this.nextPosition.z) &&
+      !this.intersectsBuilding(this.nextPosition.x, this.nextPosition.z, this.character.position.y) &&
       !this.intersectsTraffic(this.nextPosition.x, this.nextPosition.z) &&
       !this.intersectsNpc(this.nextPosition.x, this.nextPosition.z)
     ) {
@@ -248,13 +248,14 @@ export class ThirdPersonController {
     }
   }
 
-  private intersectsBuilding(x: number, z: number): boolean {
+  private intersectsBuilding(x: number, z: number, y: number): boolean {
     return this.colliders.some(
       (collider) =>
         x > collider.minX - this.playerRadius &&
         x < collider.maxX + this.playerRadius &&
         z > collider.minZ - this.playerRadius &&
-        z < collider.maxZ + this.playerRadius,
+        z < collider.maxZ + this.playerRadius &&
+        y < collider.maxY - 0.45,
     );
   }
 
@@ -275,6 +276,7 @@ export class ThirdPersonController {
   private updateFlight(deltaSeconds: number): void {
     const wantsLift = this.pressed.has("Space") && this.character.position.y < this.maxFlightY;
     const targetVelocity = wantsLift ? 11 : -13;
+    const supportY = this.getSupportHeight(this.character.position.x, this.character.position.z);
     const smoothing = wantsLift ? 1 - Math.exp(-deltaSeconds * 10) : 1 - Math.exp(-deltaSeconds * 5);
     this.verticalVelocity = THREE.MathUtils.lerp(this.verticalVelocity, targetVelocity, smoothing);
     this.character.position.y += this.verticalVelocity * deltaSeconds;
@@ -284,10 +286,22 @@ export class ThirdPersonController {
       this.verticalVelocity = Math.min(this.verticalVelocity, 0);
     }
 
-    if (this.character.position.y <= this.groundY) {
-      this.character.position.y = this.groundY;
+    if (this.character.position.y <= supportY) {
+      this.character.position.y = supportY;
       this.verticalVelocity = 0;
     }
+  }
+
+  private getSupportHeight(x: number, z: number): number {
+    return this.colliders.reduce((supportY, collider) => {
+      const isInsideRoof =
+        x > collider.minX - this.playerRadius * 0.35 &&
+        x < collider.maxX + this.playerRadius * 0.35 &&
+        z > collider.minZ - this.playerRadius * 0.35 &&
+        z < collider.maxZ + this.playerRadius * 0.35;
+
+      return isInsideRoof ? Math.max(supportY, collider.maxY) : supportY;
+    }, this.groundY);
   }
 
   private updateCamera(deltaSeconds: number): void {
@@ -362,7 +376,8 @@ export class ThirdPersonController {
 
   private updateCharacterAnimation(deltaSeconds: number, isMoving: boolean): void {
     if (this.mixer) {
-      const nextAction = isMoving ? this.walkAction : this.idleAction;
+      const isGrounded = Math.abs(this.character.position.y - this.getSupportHeight(this.character.position.x, this.character.position.z)) < 0.08;
+      const nextAction = isMoving && isGrounded ? this.walkAction : this.idleAction;
 
       if (nextAction && nextAction !== this.currentAction) {
         nextAction.reset().fadeIn(0.16).play();
