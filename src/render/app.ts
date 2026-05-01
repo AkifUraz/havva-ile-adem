@@ -71,6 +71,7 @@ export class CitySandboxApp {
       bounds: cityBounds,
       colliders: buildingColliders,
       getTrafficColliders: () => this.carTrafficSystem?.getColliders() ?? [],
+      getNpcColliders: () => this.npcSystem?.getColliders() ?? [],
       onLockChange: (isLocked) => this.hud.setLocked(isLocked),
     });
 

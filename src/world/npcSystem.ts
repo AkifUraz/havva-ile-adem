@@ -36,7 +36,14 @@ interface NpcWalker {
 
 export interface NpcSystem {
   update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
+  getColliders(): NpcCollider[];
   dispose(): void;
+}
+
+export interface NpcCollider {
+  x: number;
+  z: number;
+  radius: number;
 }
 
 const npcRadius = 0.9;
@@ -105,6 +112,13 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
   return {
     update(deltaSeconds: number, playerPosition?: THREE.Vector3) {
       walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition));
+    },
+    getColliders() {
+      return walkers.map((walker) => ({
+        x: walker.root.position.x,
+        z: walker.root.position.z,
+        radius: npcRadius + 0.25,
+      }));
     },
     dispose() {
       walkers.forEach((walker) => {

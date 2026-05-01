@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { CityBounds, ColliderRect } from "../world/cityLayout";
 import type { TrafficCollider } from "../world/carTrafficSystem";
+import type { NpcCollider } from "../world/npcSystem";
 
 interface ThirdPersonControllerOptions {
   camera: THREE.PerspectiveCamera;
@@ -11,6 +12,7 @@ interface ThirdPersonControllerOptions {
   bounds: CityBounds;
   colliders: ColliderRect[];
   getTrafficColliders?: () => TrafficCollider[];
+  getNpcColliders?: () => NpcCollider[];
   onLockChange?: (isLocked: boolean) => void;
 }
 
@@ -27,6 +29,7 @@ export class ThirdPersonController {
   private readonly bounds: CityBounds;
   private readonly colliders: ColliderRect[];
   private readonly getTrafficColliders?: () => TrafficCollider[];
+  private readonly getNpcColliders?: () => NpcCollider[];
   private readonly onLockChange?: (isLocked: boolean) => void;
   private readonly pressed = new Set<string>();
   private readonly character = new THREE.Group();
@@ -62,6 +65,7 @@ export class ThirdPersonController {
     this.bounds = options.bounds;
     this.colliders = options.colliders;
     this.getTrafficColliders = options.getTrafficColliders;
+    this.getNpcColliders = options.getNpcColliders;
     this.onLockChange = options.onLockChange;
 
     this.character.name = "third-person-character";
@@ -217,7 +221,11 @@ export class ThirdPersonController {
     this.nextPosition.x = THREE.MathUtils.clamp(this.nextPosition.x + deltaX, this.bounds.minX, this.bounds.maxX);
     this.nextPosition.z = THREE.MathUtils.clamp(this.nextPosition.z + deltaZ, this.bounds.minZ, this.bounds.maxZ);
 
-    if (!this.intersectsBuilding(this.nextPosition.x, this.nextPosition.z) && !this.intersectsTraffic(this.nextPosition.x, this.nextPosition.z)) {
+    if (
+      !this.intersectsBuilding(this.nextPosition.x, this.nextPosition.z) &&
+      !this.intersectsTraffic(this.nextPosition.x, this.nextPosition.z) &&
+      !this.intersectsNpc(this.nextPosition.x, this.nextPosition.z)
+    ) {
       this.character.position.copy(this.nextPosition);
     }
   }
@@ -240,6 +248,10 @@ export class ThirdPersonController {
       const across = dx * Math.cos(collider.yaw) - dz * Math.sin(collider.yaw);
       return Math.abs(along) < collider.halfLength + this.playerRadius && Math.abs(across) < collider.halfWidth + this.playerRadius;
     }) ?? false;
+  }
+
+  private intersectsNpc(x: number, z: number): boolean {
+    return this.getNpcColliders?.().some((collider) => Math.hypot(x - collider.x, z - collider.z) < this.playerRadius + collider.radius) ?? false;
   }
 
   private updateCamera(deltaSeconds: number): void {
