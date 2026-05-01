@@ -5,6 +5,7 @@ export interface HudController {
   setMessage(message: string): void;
   setPosition(position: string): void;
   setForceProgress(progress: number, isLocked: boolean): void;
+  setReticleOffset(offsetX: number, offsetY: number): void;
 }
 
 export function createHud(root: HTMLElement): HudController {
@@ -59,6 +60,10 @@ export function createHud(root: HTMLElement): HudController {
       reticle.style.setProperty("--force-progress", `${clampedProgress}`);
       reticle.classList.toggle("hud__reticle--active", clampedProgress > 0);
       reticle.classList.toggle("hud__reticle--locked", isLocked);
+    },
+    setReticleOffset(offsetX: number, offsetY: number) {
+      reticle.style.setProperty("--reticle-x", `${offsetX}px`);
+      reticle.style.setProperty("--reticle-y", `${offsetY}px`);
     },
   };
 }

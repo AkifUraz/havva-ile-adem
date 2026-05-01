@@ -84,10 +84,11 @@ export class CitySandboxApp {
       domElement: this.renderer.domElement,
       getTargets: () => [...(this.npcSystem?.getForceTargets() ?? []), ...(this.carTrafficSystem?.getForceTargets() ?? [])],
       setHudProgress: (progress, isLocked) => this.hud.setForceProgress(progress, isLocked),
+      setReticleOffset: (offsetX, offsetY) => this.hud.setReticleOffset(offsetX, offsetY),
       setForceActive: (isActive) => this.controller?.setForcePose(isActive),
     });
 
-    this.hud.setMessage("Click the game, then use WASD or arrow keys to move. Hold Space to fly. Hold on a target to lift it, release to throw.");
+    this.hud.setMessage("Click the game, then use WASD or arrow keys to move. Hold and drag to aim, release to throw. Hold Space to fly.");
     this.animate();
   }
 

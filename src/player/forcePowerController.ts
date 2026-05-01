@@ -6,24 +6,34 @@ interface ForcePowerControllerOptions {
   domElement: HTMLElement;
   getTargets: () => ForceTarget[];
   setHudProgress: (progress: number, isLocked: boolean) => void;
+  setReticleOffset?: (offsetX: number, offsetY: number) => void;
   setForceActive?: (isActive: boolean) => void;
 }
 
 const lockSeconds = 0.6;
 const maxTargetDistance = 95;
+const maxAimOffsetX = 180;
+const maxAimOffsetY = 220;
 
 export class ForcePowerController {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly domElement: HTMLElement;
   private readonly getTargets: () => ForceTarget[];
   private readonly setHudProgress: (progress: number, isLocked: boolean) => void;
+  private readonly setReticleOffset?: (offsetX: number, offsetY: number) => void;
   private readonly setForceActive?: (isActive: boolean) => void;
   private readonly cameraDirection = new THREE.Vector3();
   private readonly targetPosition = new THREE.Vector3();
   private readonly holdPosition = new THREE.Vector3();
   private readonly rayOrigin = new THREE.Vector3();
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly aimPoint = new THREE.Vector2();
   private isHolding = false;
   private activePointerId: number | null = null;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
+  private aimOffsetX = 0;
+  private aimOffsetY = 0;
   private hoveredTargetId = "";
   private lockProgress = 0;
   private holdDistance = 16;
@@ -34,9 +44,11 @@ export class ForcePowerController {
     this.domElement = options.domElement;
     this.getTargets = options.getTargets;
     this.setHudProgress = options.setHudProgress;
+    this.setReticleOffset = options.setReticleOffset;
     this.setForceActive = options.setForceActive;
 
     this.domElement.addEventListener("pointerdown", this.handlePointerDown);
+    this.domElement.addEventListener("pointermove", this.handlePointerMove);
     this.domElement.addEventListener("pointerup", this.handlePointerUp);
     this.domElement.addEventListener("pointercancel", this.handlePointerUp);
   }
@@ -81,6 +93,7 @@ export class ForcePowerController {
   dispose(): void {
     this.releaseHeldTarget();
     this.domElement.removeEventListener("pointerdown", this.handlePointerDown);
+    this.domElement.removeEventListener("pointermove", this.handlePointerMove);
     this.domElement.removeEventListener("pointerup", this.handlePointerUp);
     this.domElement.removeEventListener("pointercancel", this.handlePointerUp);
   }
@@ -92,6 +105,23 @@ export class ForcePowerController {
 
     this.isHolding = true;
     this.activePointerId = event.pointerId;
+    this.lastPointerX = event.clientX;
+    this.lastPointerY = event.clientY;
+  };
+
+  private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (!this.isHolding || this.activePointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - this.lastPointerX;
+    const deltaY = event.clientY - this.lastPointerY;
+    this.lastPointerX = event.clientX;
+    this.lastPointerY = event.clientY;
+    const sensitivity = event.pointerType === "touch" ? 1.15 : 0.82;
+    this.aimOffsetX = THREE.MathUtils.clamp(this.aimOffsetX + deltaX * sensitivity, -maxAimOffsetX, maxAimOffsetX);
+    this.aimOffsetY = THREE.MathUtils.clamp(this.aimOffsetY + deltaY * sensitivity, -120, maxAimOffsetY);
+    this.setReticleOffset?.(this.aimOffsetX, this.aimOffsetY);
   };
 
   private readonly handlePointerUp = (event: PointerEvent): void => {
@@ -110,7 +140,7 @@ export class ForcePowerController {
       return;
     }
 
-    this.camera.getWorldDirection(this.cameraDirection);
+    this.updateAimRay();
     this.holdPosition.copy(this.camera.position).addScaledVector(this.cameraDirection, this.holdDistance);
     this.holdPosition.y = Math.max(this.holdPosition.y, 3.2);
     this.lockedTarget.setForceHeld(true, this.holdPosition);
@@ -121,7 +151,7 @@ export class ForcePowerController {
       return;
     }
 
-    this.camera.getWorldDirection(this.cameraDirection);
+    this.updateAimRay();
     const launchSpeed = this.lockedTarget.type === "car" ? 38 : 31;
     const liftSpeed = this.lockedTarget.type === "car" ? 17 : 14;
     const impulse = this.cameraDirection.clone().multiplyScalar(launchSpeed);
@@ -144,8 +174,7 @@ export class ForcePowerController {
   }
 
   private findCenteredTarget(): ForceTarget | undefined {
-    this.camera.getWorldDirection(this.cameraDirection);
-    this.rayOrigin.copy(this.camera.position);
+    this.updateAimRay();
 
     let bestTarget: ForceTarget | undefined;
     let bestScore = Number.POSITIVE_INFINITY;
@@ -174,5 +203,14 @@ export class ForcePowerController {
     });
 
     return bestTarget;
+  }
+
+  private updateAimRay(): void {
+    const width = Math.max(window.innerWidth, 1);
+    const height = Math.max(window.innerHeight, 1);
+    this.aimPoint.set(this.aimOffsetX / (width * 0.5), -this.aimOffsetY / (height * 0.5));
+    this.raycaster.setFromCamera(this.aimPoint, this.camera);
+    this.rayOrigin.copy(this.raycaster.ray.origin);
+    this.cameraDirection.copy(this.raycaster.ray.direction);
   }
 }

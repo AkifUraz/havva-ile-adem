@@ -63,7 +63,7 @@ export class ThirdPersonController {
   private movementInputSignature = "";
   private movementYawBase = 0;
   private verticalVelocity = 0;
-  private readonly playerRadius = 1.25;
+  private readonly playerRadius = 1.08;
   private readonly speed = 18;
   private readonly cameraDistance = 7.2;
   private readonly cameraHeight = 6.7;
@@ -494,7 +494,7 @@ function normalizeCharacterModel(source: THREE.Group): THREE.Group {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const safeHeight = Math.max(size.y, 0.001);
-  const scale = 4.3 / safeHeight;
+  const scale = 3.75 / safeHeight;
 
   model.scale.setScalar(scale);
   model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);

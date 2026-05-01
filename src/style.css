@@ -92,6 +92,8 @@ canvas {
 
 .hud__reticle {
   --force-progress: 0;
+  --reticle-x: 0px;
+  --reticle-y: 0px;
   position: absolute;
   left: 50%;
   top: 50%;
@@ -99,7 +101,7 @@ canvas {
   height: 28px;
   border: 2px solid rgb(255 255 255 / 0.72);
   border-radius: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(calc(-50% + var(--reticle-x)), calc(-50% + var(--reticle-y)));
   opacity: 0.74;
   transition:
     border-color 120ms ease,
@@ -146,7 +148,7 @@ canvas {
 
 .hud__reticle--locked {
   border-color: #fff5a0;
-  transform: translate(-50%, -50%) scale(1.18);
+  transform: translate(calc(-50% + var(--reticle-x)), calc(-50% + var(--reticle-y))) scale(1.18);
 }
 
 .hud__reticle--locked::after {
