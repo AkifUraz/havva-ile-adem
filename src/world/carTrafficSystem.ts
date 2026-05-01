@@ -13,6 +13,7 @@ interface TrafficCar {
   route: TrafficRoute;
   targetIndex: number;
   wheels: THREE.Object3D[];
+  waiting: boolean;
 }
 
 export interface TrafficCollider {
@@ -113,22 +114,22 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
         route,
         targetIndex: 1,
         wheels: collectWheels(root),
+        waiting: false,
       };
     }),
   );
 
   return {
     update(deltaSeconds: number) {
-      cars.forEach((car) => updateCar(car, deltaSeconds));
+      const colliders = cars.map((car) => getTrafficCollider(car));
+      cars.forEach((car, index) => {
+        const otherColliders = colliders.filter((_, colliderIndex) => colliderIndex !== index);
+        updateCar(car, deltaSeconds, otherColliders);
+        colliders[index] = getTrafficCollider(car);
+      });
     },
     getColliders() {
-      return cars.map((car) => ({
-        x: car.root.position.x,
-        z: car.root.position.z,
-        yaw: car.root.rotation.y,
-        halfLength: car.route.length * 0.5,
-        halfWidth: car.route.length * 0.23,
-      }));
+      return cars.map((car) => getTrafficCollider(car));
     },
     dispose() {
       cars.forEach((car) => scene.remove(car.root));
@@ -136,7 +137,7 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
   };
 }
 
-function updateCar(car: TrafficCar, deltaSeconds: number): void {
+function updateCar(car: TrafficCar, deltaSeconds: number, otherColliders: TrafficCollider[]): void {
   const target = car.route.points[car.targetIndex];
   const dx = target.x - car.root.position.x;
   const dz = target.z - car.root.position.z;
@@ -152,10 +153,62 @@ function updateCar(car: TrafficCar, deltaSeconds: number): void {
   const directionX = dx / distance;
   const directionZ = dz / distance;
   const step = Math.min(distance, car.route.speed * deltaSeconds);
+  const yaw = getHeadingYaw(directionX, directionZ);
+  const nextCollider = getTrafficCollider(car, {
+    x: car.root.position.x + directionX * step,
+    z: car.root.position.z + directionZ * step,
+    yaw,
+  });
+
+  if (otherColliders.some((collider) => trafficCollidersOverlap(nextCollider, collider))) {
+    car.waiting = true;
+    return;
+  }
+
+  car.waiting = false;
   car.root.position.x += directionX * step;
   car.root.position.z += directionZ * step;
-  car.root.rotation.y = getHeadingYaw(directionX, directionZ);
+  car.root.rotation.y = yaw;
   spinWheels(car.wheels, step);
+}
+
+function getTrafficCollider(
+  car: TrafficCar,
+  override?: { x: number; z: number; yaw: number },
+): TrafficCollider {
+  return {
+    x: override?.x ?? car.root.position.x,
+    z: override?.z ?? car.root.position.z,
+    yaw: override?.yaw ?? car.root.rotation.y,
+    halfLength: car.route.length * 0.5 + 1.4,
+    halfWidth: car.route.length * 0.23 + 0.45,
+  };
+}
+
+function trafficCollidersOverlap(a: TrafficCollider, b: TrafficCollider): boolean {
+  const axes = [getForwardAxis(a.yaw), getRightAxis(a.yaw), getForwardAxis(b.yaw), getRightAxis(b.yaw)];
+
+  return axes.every((axis) => {
+    const centerDistance = Math.abs((b.x - a.x) * axis.x + (b.z - a.z) * axis.z);
+    return centerDistance < getProjectionRadius(a, axis) + getProjectionRadius(b, axis);
+  });
+}
+
+function getProjectionRadius(collider: TrafficCollider, axis: { x: number; z: number }): number {
+  const forward = getForwardAxis(collider.yaw);
+  const right = getRightAxis(collider.yaw);
+  return (
+    Math.abs(axis.x * forward.x + axis.z * forward.z) * collider.halfLength +
+    Math.abs(axis.x * right.x + axis.z * right.z) * collider.halfWidth
+  );
+}
+
+function getForwardAxis(yaw: number): { x: number; z: number } {
+  return { x: Math.sin(yaw), z: Math.cos(yaw) };
+}
+
+function getRightAxis(yaw: number): { x: number; z: number } {
+  return { x: Math.cos(yaw), z: -Math.sin(yaw) };
 }
 
 function faceNextPoint(root: THREE.Group, current: { x: number; z: number }, next: { x: number; z: number }): void {
