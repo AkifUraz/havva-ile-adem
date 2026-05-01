@@ -402,7 +402,8 @@ export class ThirdPersonController {
   private updateVisualPose(deltaSeconds: number): void {
     const targetAmount = this.wantsForcePose ? 1 : 0;
     this.forcePoseAmount = THREE.MathUtils.lerp(this.forcePoseAmount, targetAmount, 1 - Math.exp(-deltaSeconds * 12));
-    const flightTarget = THREE.MathUtils.clamp((this.character.position.y - this.groundY) / 9, 0, 1);
+    const supportY = this.getSupportHeight(this.character.position.x, this.character.position.z);
+    const flightTarget = THREE.MathUtils.clamp((this.character.position.y - supportY) / 9, 0, 1);
     this.flightPoseAmount = THREE.MathUtils.lerp(this.flightPoseAmount, flightTarget, 1 - Math.exp(-deltaSeconds * 5.4));
     const forceAmount = this.forcePoseAmount;
     const flightAmount = this.flightPoseAmount;
