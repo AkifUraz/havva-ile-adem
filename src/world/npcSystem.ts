@@ -1,19 +1,35 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { buildingColliders, cityBounds, type ColliderRect } from "./cityLayout";
 
-interface NpcRoute {
+type NpcState = "walking" | "pausing" | "lookingAround";
+
+interface WalkNode {
+  id: string;
+  x: number;
+  z: number;
+  neighbors: string[];
+}
+
+interface NpcConfig {
   characterId: string;
+  startNode: string;
   speed: number;
-  points: Array<{ x: number; z: number }>;
+  seed: number;
 }
 
 interface NpcWalker {
   root: THREE.Group;
   mixer?: THREE.AnimationMixer;
   walkAction?: THREE.AnimationAction;
-  route: NpcRoute;
-  targetIndex: number;
-  pauseTime: number;
+  config: NpcConfig;
+  state: NpcState;
+  stateTime: number;
+  currentNode: string;
+  targetNode: string;
+  previousNode?: string;
+  seed: number;
+  baseRotation: number;
 }
 
 export interface NpcSystem {
@@ -21,73 +37,14 @@ export interface NpcSystem {
   dispose(): void;
 }
 
-const npcRoutes: NpcRoute[] = [
-  {
-    characterId: "b",
-    speed: 3.45,
-    points: [
-      { x: -9, z: 82 },
-      { x: 36, z: 82 },
-      { x: 36, z: 48 },
-      { x: 82, z: 48 },
-      { x: 82, z: 4 },
-      { x: 36, z: 4 },
-      { x: -9, z: 4 },
-    ],
-  },
-  {
-    characterId: "d",
-    speed: 3.1,
-    points: [
-      { x: 54, z: 86 },
-      { x: 54, z: 42 },
-      { x: 8, z: 42 },
-      { x: 8, z: -4 },
-      { x: 54, z: -4 },
-      { x: 54, z: -48 },
-    ],
-  },
-  {
-    characterId: "h",
-    speed: 3.3,
-    points: [
-      { x: -84, z: 8 },
-      { x: -42, z: 8 },
-      { x: -42, z: 52 },
-      { x: 4, z: 52 },
-      { x: 4, z: 8 },
-      { x: 48, z: 8 },
-      { x: 48, z: -38 },
-      { x: 4, z: -38 },
-      { x: -42, z: -38 },
-      { x: -84, z: -38 },
-    ],
-  },
-  {
-    characterId: "n",
-    speed: 2.95,
-    points: [
-      { x: -54, z: -84 },
-      { x: -54, z: -40 },
-      { x: -8, z: -40 },
-      { x: -8, z: 6 },
-      { x: -54, z: 6 },
-      { x: -54, z: 50 },
-    ],
-  },
-  {
-    characterId: "q",
-    speed: 3.6,
-    points: [
-      { x: 10, z: 66 },
-      { x: -36, z: 66 },
-      { x: -36, z: 20 },
-      { x: -82, z: 20 },
-      { x: -82, z: -24 },
-      { x: -36, z: -24 },
-      { x: 10, z: -24 },
-    ],
-  },
+const npcRadius = 0.9;
+const walkGraph = createWalkGraph();
+const npcConfigs: NpcConfig[] = [
+  { characterId: "b", startNode: "-46:92", speed: 2.45, seed: 11 },
+  { characterId: "d", startNode: "46:92", speed: 2.1, seed: 23 },
+  { characterId: "h", startNode: "-92:0", speed: 2.35, seed: 37 },
+  { characterId: "n", startNode: "-46:-92", speed: 1.95, seed: 41 },
+  { characterId: "q", startNode: "0:46", speed: 2.7, seed: 53 },
 ];
 
 const npcTextureMap: Record<string, string> = {
@@ -108,16 +65,18 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
 
   const loader = new GLTFLoader(loadingManager);
   const walkers = await Promise.all(
-    npcRoutes.map(async (route) => {
-      const gltf = await loader.loadAsync(`/assets/npcs/character-${route.characterId}.glb`);
+    npcConfigs.map(async (config) => {
+      const gltf = await loader.loadAsync(`/assets/npcs/character-${config.characterId}.glb`);
       const root = normalizeNpcModel(gltf.scene);
-      const firstPoint = route.points[0];
-      root.position.set(firstPoint.x, 0.18, firstPoint.z);
+      const startNode = getNode(config.startNode);
+      const initialChoice = chooseNextNode(config.startNode, undefined, config.seed);
+      root.position.set(startNode.x, 0.18, startNode.z);
 
       const mixer = new THREE.AnimationMixer(root);
       const walkClip = THREE.AnimationClip.findByName(gltf.animations, "walk");
       const walkAction = walkClip ? mixer.clipAction(walkClip) : undefined;
-      walkAction?.setEffectiveTimeScale(0.68 + route.speed / 18).play();
+      walkAction?.setEffectiveTimeScale(0.72 + config.speed / 12).play();
+      setWalkingAnimation(walkAction, false);
 
       scene.add(root);
 
@@ -125,9 +84,13 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         root,
         mixer,
         walkAction,
-        route,
-        targetIndex: 1,
-        pauseTime: route.characterId.charCodeAt(0) % 3,
+        config,
+        state: "pausing" as NpcState,
+        stateTime: 0.7 + (config.seed % 4) * 0.35,
+        currentNode: config.startNode,
+        targetNode: initialChoice.nodeId,
+        seed: initialChoice.seed,
+        baseRotation: 0,
       };
     }),
   );
@@ -148,29 +111,226 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
 function updateWalker(walker: NpcWalker, deltaSeconds: number): void {
   walker.mixer?.update(deltaSeconds);
 
-  if (walker.pauseTime > 0) {
-    walker.pauseTime -= deltaSeconds;
+  if (walker.state === "pausing") {
+    updatePause(walker, deltaSeconds);
     return;
   }
 
-  const target = walker.route.points[walker.targetIndex];
+  if (walker.state === "lookingAround") {
+    updateLookAround(walker, deltaSeconds);
+    return;
+  }
+
+  updateWalking(walker, deltaSeconds);
+}
+
+function updateWalking(walker: NpcWalker, deltaSeconds: number): void {
+  setWalkingAnimation(walker.walkAction, true);
+  const target = getNode(walker.targetNode);
   const dx = target.x - walker.root.position.x;
   const dz = target.z - walker.root.position.z;
   const distance = Math.hypot(dx, dz);
 
   if (distance < 0.4) {
-    walker.targetIndex = (walker.targetIndex + 1) % walker.route.points.length;
-    walker.pauseTime = 1.2 + (walker.route.characterId.charCodeAt(0) % 4) * 0.22;
+    arriveAtNode(walker);
     return;
   }
 
-  const step = Math.min(distance, walker.route.speed * deltaSeconds);
+  const step = Math.min(distance, walker.config.speed * deltaSeconds);
   const directionX = dx / distance;
   const directionZ = dz / distance;
+  const nextX = walker.root.position.x + directionX * step;
+  const nextZ = walker.root.position.z + directionZ * step;
 
-  walker.root.position.x += directionX * step;
-  walker.root.position.z += directionZ * step;
+  if (intersectsAnyCollider(nextX, nextZ) || !isSafeSegment(walker.root.position.x, walker.root.position.z, nextX, nextZ)) {
+    chooseSafeDetour(walker);
+    return;
+  }
+
+  walker.root.position.x = nextX;
+  walker.root.position.z = nextZ;
   walker.root.rotation.y = Math.atan2(directionX, directionZ) + Math.PI;
+}
+
+function updatePause(walker: NpcWalker, deltaSeconds: number): void {
+  setWalkingAnimation(walker.walkAction, false);
+  walker.stateTime -= deltaSeconds;
+
+  if (walker.stateTime > 0) {
+    return;
+  }
+
+  walker.seed = nextSeed(walker.seed);
+  if ((walker.seed % 100) < 32) {
+    walker.state = "lookingAround";
+    walker.stateTime = 0.9 + random01(walker.seed) * 1.4;
+    walker.baseRotation = walker.root.rotation.y;
+    return;
+  }
+
+  walker.state = "walking";
+}
+
+function updateLookAround(walker: NpcWalker, deltaSeconds: number): void {
+  setWalkingAnimation(walker.walkAction, false);
+  walker.stateTime -= deltaSeconds;
+  walker.root.rotation.y = walker.baseRotation + Math.sin(walker.stateTime * 4.2) * 0.42;
+
+  if (walker.stateTime <= 0) {
+    walker.root.rotation.y = walker.baseRotation;
+    walker.state = "walking";
+  }
+}
+
+function arriveAtNode(walker: NpcWalker): void {
+  const target = getNode(walker.targetNode);
+  walker.root.position.set(target.x, 0.18, target.z);
+  walker.previousNode = walker.currentNode;
+  walker.currentNode = walker.targetNode;
+  const nextChoice = chooseNextNode(walker.currentNode, walker.previousNode, walker.seed);
+  walker.targetNode = nextChoice.nodeId;
+  walker.seed = nextChoice.seed;
+  walker.state = "pausing";
+  walker.stateTime = 1.5 + random01(walker.seed) * 3.5;
+}
+
+function chooseSafeDetour(walker: NpcWalker): void {
+  const nextChoice = chooseNextNode(walker.currentNode, walker.targetNode, walker.seed + 17);
+  walker.targetNode = nextChoice.nodeId;
+  walker.seed = nextChoice.seed;
+  walker.state = "pausing";
+  walker.stateTime = 0.8 + random01(walker.seed) * 1.2;
+}
+
+function createWalkGraph(): Map<string, WalkNode> {
+  const graph = new Map<string, WalkNode>();
+  const coordinates = [-92, -46, 0, 46, 92];
+
+  coordinates.forEach((z) => {
+    coordinates.forEach((x) => {
+      if (x >= cityBounds.minX && x <= cityBounds.maxX && z >= cityBounds.minZ && z <= cityBounds.maxZ && !intersectsAnyCollider(x, z)) {
+        const id = createNodeId(x, z);
+        graph.set(id, { id, x, z, neighbors: [] });
+      }
+    });
+  });
+
+  graph.forEach((node) => {
+    coordinates.forEach((candidateX) => {
+      const candidateId = createNodeId(candidateX, node.z);
+      if (candidateX !== node.x && graph.has(candidateId) && isAdjacentCoordinate(node.x, candidateX) && isSafeSegment(node.x, node.z, candidateX, node.z)) {
+        node.neighbors.push(candidateId);
+      }
+    });
+
+    coordinates.forEach((candidateZ) => {
+      const candidateId = createNodeId(node.x, candidateZ);
+      if (candidateZ !== node.z && graph.has(candidateId) && isAdjacentCoordinate(node.z, candidateZ) && isSafeSegment(node.x, node.z, node.x, candidateZ)) {
+        node.neighbors.push(candidateId);
+      }
+    });
+  });
+
+  return graph;
+}
+
+function createNodeId(x: number, z: number): string {
+  return `${x}:${z}`;
+}
+
+function isAdjacentCoordinate(a: number, b: number): boolean {
+  return Math.abs(a - b) === 46;
+}
+
+function getNode(nodeId: string): WalkNode {
+  const node = walkGraph.get(nodeId);
+
+  if (!node) {
+    throw new Error(`Missing NPC walk node: ${nodeId}`);
+  }
+
+  return node;
+}
+
+function chooseNextNode(currentNodeId: string, previousNodeId: string | undefined, seed: number): { nodeId: string; seed: number } {
+  const currentNode = getNode(currentNodeId);
+  const options = currentNode.neighbors.filter((nodeId) => nodeId !== previousNodeId);
+  const candidates = options.length > 0 ? options : currentNode.neighbors;
+
+  if (candidates.length === 0) {
+    return { nodeId: currentNodeId, seed: nextSeed(seed) };
+  }
+
+  const next = nextSeed(seed);
+  const nodeId = candidates[Math.floor(random01(next) * candidates.length) % candidates.length];
+  return { nodeId, seed: next };
+}
+
+function setWalkingAnimation(action: THREE.AnimationAction | undefined, isWalking: boolean): void {
+  if (!action) {
+    return;
+  }
+
+  action.enabled = true;
+  action.paused = !isWalking;
+}
+
+function intersectsAnyCollider(x: number, z: number): boolean {
+  return buildingColliders.some((collider) => pointIntersectsCollider(x, z, collider));
+}
+
+function pointIntersectsCollider(x: number, z: number, collider: ColliderRect): boolean {
+  return x > collider.minX - npcRadius && x < collider.maxX + npcRadius && z > collider.minZ - npcRadius && z < collider.maxZ + npcRadius;
+}
+
+function isSafeSegment(startX: number, startZ: number, endX: number, endZ: number): boolean {
+  return !buildingColliders.some((collider) => segmentIntersectsCollider(startX, startZ, endX, endZ, collider));
+}
+
+function segmentIntersectsCollider(startX: number, startZ: number, endX: number, endZ: number, collider: ColliderRect): boolean {
+  const minX = collider.minX - npcRadius;
+  const maxX = collider.maxX + npcRadius;
+  const minZ = collider.minZ - npcRadius;
+  const maxZ = collider.maxZ + npcRadius;
+  const dx = endX - startX;
+  const dz = endZ - startZ;
+  let near = 0;
+  let far = 1;
+
+  const clip = (distance: number, edge: number): boolean => {
+    if (distance === 0) {
+      return edge >= 0;
+    }
+
+    const value = edge / distance;
+    if (distance < 0) {
+      if (value > far) {
+        return false;
+      }
+      if (value > near) {
+        near = value;
+      }
+      return true;
+    }
+
+    if (value < near) {
+      return false;
+    }
+    if (value < far) {
+      far = value;
+    }
+    return true;
+  };
+
+  return clip(-dx, startX - minX) && clip(dx, maxX - startX) && clip(-dz, startZ - minZ) && clip(dz, maxZ - startZ);
+}
+
+function nextSeed(seed: number): number {
+  return (seed * 1664525 + 1013904223) >>> 0;
+}
+
+function random01(seed: number): number {
+  return seed / 0xffffffff;
 }
 
 function normalizeNpcModel(source: THREE.Group): THREE.Group {
