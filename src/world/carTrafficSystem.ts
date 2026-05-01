@@ -4,7 +4,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 interface TrafficRoute {
   assetId: string;
   speed: number;
-  scale: number;
+  length: number;
   points: Array<{ x: number; z: number }>;
 }
 
@@ -23,61 +23,61 @@ const trafficRoutes: TrafficRoute[] = [
   {
     assetId: "sedan",
     speed: 9.5,
-    scale: 3.8,
+    length: 8.4,
     points: [
-      { x: -96, z: -8 },
-      { x: -38, z: -8 },
-      { x: 8, z: -8 },
-      { x: 54, z: -8 },
-      { x: 96, z: -8 },
+      { x: -106, z: -4.5 },
+      { x: -46, z: -4.5 },
+      { x: 0, z: -4.5 },
+      { x: 46, z: -4.5 },
+      { x: 106, z: -4.5 },
     ],
   },
   {
     assetId: "taxi",
     speed: 8.8,
-    scale: 3.75,
+    length: 8.2,
     points: [
-      { x: 96, z: 8 },
-      { x: 54, z: 8 },
-      { x: 8, z: 8 },
-      { x: -38, z: 8 },
-      { x: -96, z: 8 },
+      { x: 106, z: 4.5 },
+      { x: 46, z: 4.5 },
+      { x: 0, z: 4.5 },
+      { x: -46, z: 4.5 },
+      { x: -106, z: 4.5 },
     ],
   },
   {
     assetId: "van",
     speed: 7.4,
-    scale: 3.9,
+    length: 8.8,
     points: [
-      { x: -8, z: 96 },
-      { x: -8, z: 54 },
-      { x: -8, z: 8 },
-      { x: -8, z: -38 },
-      { x: -8, z: -96 },
+      { x: -50.5, z: 106 },
+      { x: -50.5, z: 46 },
+      { x: -50.5, z: 0 },
+      { x: -50.5, z: -46 },
+      { x: -50.5, z: -106 },
     ],
   },
   {
     assetId: "suv",
     speed: 8.1,
-    scale: 3.75,
+    length: 8.4,
     points: [
-      { x: 8, z: -96 },
-      { x: 8, z: -38 },
-      { x: 8, z: 8 },
-      { x: 8, z: 54 },
-      { x: 8, z: 96 },
+      { x: 50.5, z: -106 },
+      { x: 50.5, z: -46 },
+      { x: 50.5, z: 0 },
+      { x: 50.5, z: 46 },
+      { x: 50.5, z: 106 },
     ],
   },
   {
     assetId: "delivery",
     speed: 6.5,
-    scale: 4.15,
+    length: 9.6,
     points: [
-      { x: -96, z: 54 },
-      { x: -46, z: 54 },
-      { x: 0, z: 54 },
-      { x: 46, z: 54 },
-      { x: 96, z: 54 },
+      { x: -106, z: 41.5 },
+      { x: -46, z: 41.5 },
+      { x: 0, z: 41.5 },
+      { x: 46, z: 41.5 },
+      { x: 106, z: 41.5 },
     ],
   },
 ];
@@ -92,7 +92,7 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
   const cars = await Promise.all(
     trafficRoutes.map(async (route) => {
       const gltf = await loader.loadAsync(`/assets/cars/${route.assetId}.glb`);
-      const root = normalizeCarModel(gltf.scene, route.scale);
+      const root = normalizeCarModel(gltf.scene, route.length);
       const firstPoint = route.points[0];
       root.position.set(firstPoint.x, 0.2, firstPoint.z);
       faceNextPoint(root, firstPoint, route.points[1]);
