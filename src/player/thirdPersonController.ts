@@ -305,8 +305,10 @@ export class ThirdPersonController {
   }
 
   private updateCamera(deltaSeconds: number): void {
-    const horizontalDistance = this.cameraDistance * Math.cos(this.pitch);
-    const verticalOffset = this.cameraHeight + this.cameraDistance * Math.sin(this.pitch);
+    const flightLookAmount = THREE.MathUtils.clamp((this.character.position.y - this.groundY) / 28, 0, 1);
+    const effectivePitch = THREE.MathUtils.lerp(this.pitch, Math.min(this.pitch, -0.62), flightLookAmount);
+    const horizontalDistance = this.cameraDistance * Math.cos(effectivePitch);
+    const verticalOffset = this.cameraHeight + this.cameraDistance * Math.sin(effectivePitch) + flightLookAmount * 3.8;
     this.cameraForward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize();
     this.cameraRight.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize();
     const behind = this.cameraForward.clone().multiplyScalar(-horizontalDistance);
@@ -318,8 +320,8 @@ export class ThirdPersonController {
     const smoothing = 1 - Math.exp(-deltaSeconds * 9);
     this.camera.position.lerp(this.targetCameraPosition, smoothing);
 
-    this.lookTarget.copy(this.character.position).addScaledVector(this.cameraForward, 13);
-    this.lookTarget.y += 3.45;
+    this.lookTarget.copy(this.character.position).addScaledVector(this.cameraForward, 13 + flightLookAmount * 8);
+    this.lookTarget.y += 3.45 - flightLookAmount * 18;
     this.camera.lookAt(this.lookTarget);
   }
 
