@@ -60,6 +60,12 @@ export class ForcePowerController {
     }
 
     if (this.lockedTarget) {
+      if (this.lockedTarget.isAvailable && !this.lockedTarget.isAvailable()) {
+        this.lockedTarget = undefined;
+        this.resetLock();
+        return;
+      }
+
       this.updateHeldTarget();
       this.setHudProgress(1, true);
       this.setForceActive?.(true);
@@ -180,6 +186,10 @@ export class ForcePowerController {
     let bestScore = Number.POSITIVE_INFINITY;
 
     this.getTargets().forEach((target) => {
+      if (target.isAvailable && !target.isAvailable()) {
+        return;
+      }
+
       target.object.getWorldPosition(this.targetPosition);
       const toTarget = this.targetPosition.sub(this.rayOrigin);
       const along = toTarget.dot(this.cameraDirection);

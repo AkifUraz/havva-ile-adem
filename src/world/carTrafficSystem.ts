@@ -261,7 +261,14 @@ function createCarForceTarget(car: TrafficCar, index: number): ForceTarget {
     type: "car",
     object: car.root,
     radius: car.route.length * 0.62,
+    isAvailable() {
+      return !car.shattered;
+    },
     setForceHeld(isHeld: boolean, holdPosition?: THREE.Vector3) {
+      if (car.shattered) {
+        return;
+      }
+
       car.forceHeld = isHeld;
       car.waiting = isHeld;
       car.forceVelocity.set(0, 0, 0);
@@ -273,6 +280,10 @@ function createCarForceTarget(car: TrafficCar, index: number): ForceTarget {
       }
     },
     applyForceImpulse(velocity: THREE.Vector3) {
+      if (car.shattered) {
+        return;
+      }
+
       car.forceHeld = false;
       car.waiting = true;
       car.forceVelocity.copy(velocity);

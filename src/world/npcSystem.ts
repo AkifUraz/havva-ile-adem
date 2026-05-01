@@ -39,6 +39,7 @@ interface NpcWalker {
   seed: number;
   baseRotation: number;
   forceHeld: boolean;
+  forceHeldTime: number;
   forceVelocity: THREE.Vector3;
   forceFlailTime: number;
   forcePeakY: number;
@@ -62,6 +63,7 @@ export interface NpcCollider {
 
 const npcRadius = 0.9;
 const playerStopRadius = 4.2;
+const heldShatterSeconds = 4.8;
 const walkGraph = createWalkGraph();
 const npcConfigs: NpcConfig[] = [
   { characterId: "b", startNode: "-56:88", speed: 2.45, seed: 11 },
@@ -122,6 +124,7 @@ export async function createNpcSystem(scene: THREE.Scene, onShatter?: () => void
         seed: initialChoice.seed,
         baseRotation: 0,
         forceHeld: false,
+        forceHeldTime: 0,
         forceVelocity: new THREE.Vector3(),
         forceFlailTime: random01(config.seed) * Math.PI * 2,
         forcePeakY: 0.18,
@@ -182,6 +185,17 @@ function updateWalker(
   if (walker.forceHeld) {
     setNpcAnimation(walker, "idle");
     updateForceFlail(walker, deltaSeconds);
+    walker.forceHeldTime += deltaSeconds;
+
+    if (walker.forceHeldTime >= heldShatterSeconds && walker.root.position.y > 2.2) {
+      const burstVelocity = new THREE.Vector3(
+        Math.sin(walker.forceFlailTime) * 10,
+        16,
+        Math.cos(walker.forceFlailTime * 0.7) * 10,
+      );
+      shatterNpc(walker, scene, debrisPieces, burstVelocity, onShatter);
+    }
+
     return;
   }
 
@@ -505,7 +519,18 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
     type: "npc",
     object: walker.root,
     radius: 2.3,
+    isAvailable() {
+      return !walker.shattered;
+    },
     setForceHeld(isHeld: boolean, holdPosition?: THREE.Vector3) {
+      if (walker.shattered) {
+        return;
+      }
+
+      if (isHeld && !walker.forceHeld) {
+        walker.forceHeldTime = 0;
+      }
+
       walker.forceHeld = isHeld;
       walker.forceVelocity.set(0, 0, 0);
       walker.forcePeakY = Math.max(walker.forcePeakY, walker.root.position.y);
@@ -515,9 +540,18 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
         walker.root.position.copy(holdPosition);
         keepOutOfBuildings(walker.root.position, npcRadius + 0.7);
       }
+
+      if (!isHeld) {
+        walker.forceHeldTime = 0;
+      }
     },
     applyForceImpulse(velocity: THREE.Vector3) {
+      if (walker.shattered) {
+        return;
+      }
+
       walker.forceHeld = false;
+      walker.forceHeldTime = 0;
       walker.forceVelocity.copy(velocity);
       walker.forcePeakY = Math.max(walker.forcePeakY, walker.root.position.y);
       walker.state = "pausing";
@@ -577,6 +611,7 @@ function shatterNpc(
 
   walker.shattered = true;
   walker.forceHeld = false;
+  walker.forceHeldTime = 0;
   walker.forceVelocity.set(0, 0, 0);
   walker.respawnTime = 7;
   walker.mixer?.stopAllAction();
@@ -599,6 +634,7 @@ function updateNpcRespawn(walker: NpcWalker, deltaSeconds: number): void {
   walker.root.visible = true;
   walker.shattered = false;
   walker.forceHeld = false;
+  walker.forceHeldTime = 0;
   walker.forceVelocity.set(0, 0, 0);
   walker.forcePeakY = 0.18;
   walker.currentNode = walker.config.startNode;
