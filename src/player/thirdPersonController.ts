@@ -15,6 +15,7 @@ interface ThirdPersonControllerOptions {
 const moveKeys = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"]);
 const characterId = "h";
 const characterUrl = `/assets/npcs/character-${characterId}.glb`;
+const characterTextureUrl = "/assets/characters/Textures/player-robot-design.jpeg";
 
 export class ThirdPersonController {
   private readonly camera: THREE.PerspectiveCamera;
@@ -179,7 +180,7 @@ export class ThirdPersonController {
     const loadingManager = new THREE.LoadingManager();
     loadingManager.setURLModifier((url) => {
       if (url.endsWith(`Textures/texture-${characterId}.png`)) {
-        return `/assets/npcs/Textures/texture-${characterId}.png`;
+        return characterTextureUrl;
       }
 
       return url;
