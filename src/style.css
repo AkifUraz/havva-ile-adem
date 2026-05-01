@@ -90,6 +90,69 @@ canvas {
   display: none;
 }
 
+.hud__reticle {
+  --force-progress: 0;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  border: 2px solid rgb(255 255 255 / 0.72);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.74;
+  transition:
+    border-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.hud__reticle::before,
+.hud__reticle::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.86);
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.hud__reticle::after {
+  width: 42px;
+  height: 42px;
+  background: conic-gradient(#bb7cff calc(var(--force-progress) * 1turn), rgb(255 255 255 / 0.08) 0);
+  mask: radial-gradient(circle, transparent 56%, #000 58%);
+  opacity: 0;
+}
+
+.hud__reticle-progress {
+  position: absolute;
+  inset: -8px;
+  border: 1px solid rgb(187 124 255 / 0.12);
+  border-radius: 50%;
+}
+
+.hud__reticle--active {
+  border-color: #bb7cff;
+  opacity: 1;
+}
+
+.hud__reticle--active::after {
+  opacity: 1;
+}
+
+.hud__reticle--locked {
+  border-color: #fff5a0;
+  transform: translate(-50%, -50%) scale(1.18);
+}
+
+.hud__reticle--locked::after {
+  background: conic-gradient(#fff5a0 1turn, rgb(255 255 255 / 0.08) 0);
+}
+
 @media (max-width: 640px) {
   .hud__status {
     top: 10px;

@@ -17,6 +17,7 @@ interface ThirdPersonControllerOptions {
 }
 
 const moveKeys = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight"]);
+const actionKeys = new Set(["Space"]);
 const characterId = "h";
 const characterUrl = `/assets/npcs/character-${characterId}.glb`;
 const characterTextureUrl = "/assets/characters/Textures/player-robot-design.jpeg";
@@ -52,10 +53,13 @@ export class ThirdPersonController {
   private lastPointerY = 0;
   private movementInputSignature = "";
   private movementYawBase = 0;
+  private verticalVelocity = 0;
   private readonly playerRadius = 1.25;
   private readonly speed = 18;
   private readonly cameraDistance = 7.2;
   private readonly cameraHeight = 6.7;
+  private readonly groundY = 0.18;
+  private readonly maxFlightY = 18;
 
   constructor(options: ThirdPersonControllerOptions) {
     this.camera = options.camera;
@@ -115,6 +119,7 @@ export class ThirdPersonController {
 
     this.moveAxis(this.movement.x, 0);
     this.moveAxis(0, this.movement.z);
+    this.updateFlight(deltaSeconds);
     this.updateCharacterAnimation(deltaSeconds, isMoving);
     this.updateCamera(deltaSeconds);
   }
@@ -133,8 +138,8 @@ export class ThirdPersonController {
   }
 
   getPositionLabel(): string {
-    const { x, z } = this.character.position;
-    return `${x.toFixed(1)}, ${z.toFixed(1)}`;
+    const { x, y, z } = this.character.position;
+    return `${x.toFixed(1)}, ${z.toFixed(1)}, height ${Math.max(0, y - this.groundY).toFixed(1)}`;
   }
 
   getPosition(target: THREE.Vector3): THREE.Vector3 {
@@ -203,14 +208,14 @@ export class ThirdPersonController {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (moveKeys.has(event.code)) {
+    if (moveKeys.has(event.code) || actionKeys.has(event.code)) {
       this.pressed.add(event.code);
       event.preventDefault();
     }
   };
 
   private readonly handleKeyUp = (event: KeyboardEvent): void => {
-    if (moveKeys.has(event.code)) {
+    if (moveKeys.has(event.code) || actionKeys.has(event.code)) {
       this.pressed.delete(event.code);
       event.preventDefault();
     }
@@ -252,6 +257,24 @@ export class ThirdPersonController {
 
   private intersectsNpc(x: number, z: number): boolean {
     return this.getNpcColliders?.().some((collider) => Math.hypot(x - collider.x, z - collider.z) < this.playerRadius + collider.radius) ?? false;
+  }
+
+  private updateFlight(deltaSeconds: number): void {
+    const wantsLift = this.pressed.has("Space") && this.character.position.y < this.maxFlightY;
+    const targetVelocity = wantsLift ? 11 : -13;
+    const smoothing = wantsLift ? 1 - Math.exp(-deltaSeconds * 10) : 1 - Math.exp(-deltaSeconds * 5);
+    this.verticalVelocity = THREE.MathUtils.lerp(this.verticalVelocity, targetVelocity, smoothing);
+    this.character.position.y += this.verticalVelocity * deltaSeconds;
+
+    if (this.character.position.y >= this.maxFlightY) {
+      this.character.position.y = this.maxFlightY;
+      this.verticalVelocity = Math.min(this.verticalVelocity, 0);
+    }
+
+    if (this.character.position.y <= this.groundY) {
+      this.character.position.y = this.groundY;
+      this.verticalVelocity = 0;
+    }
   }
 
   private updateCamera(deltaSeconds: number): void {

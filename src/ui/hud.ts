@@ -4,6 +4,7 @@ export interface HudController {
   setLocked(isLocked: boolean): void;
   setMessage(message: string): void;
   setPosition(position: string): void;
+  setForceProgress(progress: number, isLocked: boolean): void;
 }
 
 export function createHud(root: HTMLElement): HudController {
@@ -30,8 +31,15 @@ export function createHud(root: HTMLElement): HudController {
   lockButton.type = "button";
   lockButton.textContent = "Hold and drag to look around. WASD moves, touch drag also turns the character.";
 
+  const reticle = document.createElement("div");
+  reticle.className = "hud__reticle";
+
+  const reticleProgress = document.createElement("div");
+  reticleProgress.className = "hud__reticle-progress";
+  reticle.append(reticleProgress);
+
   status.append(title, position, message);
-  element.append(status, lockButton);
+  element.append(status, reticle, lockButton);
   root.appendChild(element);
 
   return {
@@ -45,6 +53,12 @@ export function createHud(root: HTMLElement): HudController {
     },
     setPosition(nextPosition: string) {
       position.textContent = `Position: ${nextPosition}`;
+    },
+    setForceProgress(progress: number, isLocked: boolean) {
+      const clampedProgress = Math.max(0, Math.min(1, progress));
+      reticle.style.setProperty("--force-progress", `${clampedProgress}`);
+      reticle.classList.toggle("hud__reticle--active", clampedProgress > 0);
+      reticle.classList.toggle("hud__reticle--locked", isLocked);
     },
   };
 }

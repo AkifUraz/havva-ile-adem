@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { buildingColliders, cityBounds, type ColliderRect } from "./cityLayout";
+import type { ForceTarget } from "./forceTarget";
 
 type NpcState = "walking" | "pausing" | "lookingAround";
 
@@ -32,11 +33,14 @@ interface NpcWalker {
   previousNode?: string;
   seed: number;
   baseRotation: number;
+  forceHeld: boolean;
+  forceVelocity: THREE.Vector3;
 }
 
 export interface NpcSystem {
   update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
   getColliders(): NpcCollider[];
+  getForceTargets(): ForceTarget[];
   dispose(): void;
 }
 
@@ -105,6 +109,8 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         targetNode: initialChoice.nodeId,
         seed: initialChoice.seed,
         baseRotation: 0,
+        forceHeld: false,
+        forceVelocity: new THREE.Vector3(),
       };
     }),
   );
@@ -114,11 +120,16 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
       walkers.forEach((walker) => updateWalker(walker, deltaSeconds, playerPosition));
     },
     getColliders() {
-      return walkers.map((walker) => ({
-        x: walker.root.position.x,
-        z: walker.root.position.z,
-        radius: npcRadius + 0.25,
-      }));
+      return walkers
+        .filter((walker) => !walker.forceHeld && walker.root.position.y < 1.2)
+        .map((walker) => ({
+          x: walker.root.position.x,
+          z: walker.root.position.z,
+          radius: npcRadius + 0.25,
+        }));
+    },
+    getForceTargets() {
+      return walkers.map((walker, index) => createNpcForceTarget(walker, index));
     },
     dispose() {
       walkers.forEach((walker) => {
@@ -131,6 +142,16 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
 
 function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition?: THREE.Vector3): void {
   walker.mixer?.update(deltaSeconds);
+
+  if (walker.forceHeld) {
+    setNpcAnimation(walker, "idle");
+    return;
+  }
+
+  if (walker.forceVelocity.lengthSq() > 0.01 || walker.root.position.y > 0.19) {
+    updateForceMotion(walker, deltaSeconds);
+    return;
+  }
 
   if (playerPosition && isNearPlayer(walker.root.position.x, walker.root.position.z, playerPosition)) {
     setNpcAnimation(walker, "idle");
@@ -400,4 +421,44 @@ function normalizeNpcModel(source: THREE.Group): THREE.Group {
 
   wrapper.add(model);
   return wrapper;
+}
+
+function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
+  return {
+    id: `npc-${index}`,
+    type: "npc",
+    object: walker.root,
+    radius: 2.3,
+    setForceHeld(isHeld: boolean, holdPosition?: THREE.Vector3) {
+      walker.forceHeld = isHeld;
+      walker.forceVelocity.set(0, 0, 0);
+      setNpcAnimation(walker, "idle");
+
+      if (holdPosition) {
+        walker.root.position.copy(holdPosition);
+      }
+    },
+    applyForceImpulse(velocity: THREE.Vector3) {
+      walker.forceHeld = false;
+      walker.forceVelocity.copy(velocity);
+      walker.state = "pausing";
+      walker.stateTime = 1.2;
+      setNpcAnimation(walker, "idle");
+    },
+  };
+}
+
+function updateForceMotion(walker: NpcWalker, deltaSeconds: number): void {
+  setNpcAnimation(walker, "idle");
+  walker.forceVelocity.y -= 22 * deltaSeconds;
+  walker.root.position.addScaledVector(walker.forceVelocity, deltaSeconds);
+  walker.forceVelocity.x *= Math.exp(-deltaSeconds * 0.65);
+  walker.forceVelocity.z *= Math.exp(-deltaSeconds * 0.65);
+  walker.root.position.x = THREE.MathUtils.clamp(walker.root.position.x, cityBounds.minX, cityBounds.maxX);
+  walker.root.position.z = THREE.MathUtils.clamp(walker.root.position.z, cityBounds.minZ, cityBounds.maxZ);
+
+  if (walker.root.position.y <= 0.18) {
+    walker.root.position.y = 0.18;
+    walker.forceVelocity.set(0, 0, 0);
+  }
 }

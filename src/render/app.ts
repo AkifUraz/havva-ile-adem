@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ForcePowerController } from "../player/forcePowerController";
 import { ThirdPersonController } from "../player/thirdPersonController";
 import type { HudController } from "../ui/hud";
 import { buildingColliders, cityBounds } from "../world/cityLayout";
@@ -17,6 +18,7 @@ export class CitySandboxApp {
   private readonly clock = new THREE.Clock();
   private readonly playerPosition = new THREE.Vector3();
   private controller?: ThirdPersonController;
+  private forcePowerController?: ForcePowerController;
   private npcSystem?: NpcSystem;
   private carTrafficSystem?: CarTrafficSystem;
   private isDisposed = false;
@@ -74,8 +76,14 @@ export class CitySandboxApp {
       getNpcColliders: () => this.npcSystem?.getColliders() ?? [],
       onLockChange: (isLocked) => this.hud.setLocked(isLocked),
     });
+    this.forcePowerController = new ForcePowerController({
+      camera: this.camera,
+      domElement: this.renderer.domElement,
+      getTargets: () => [...(this.npcSystem?.getForceTargets() ?? []), ...(this.carTrafficSystem?.getForceTargets() ?? [])],
+      setHudProgress: (progress, isLocked) => this.hud.setForceProgress(progress, isLocked),
+    });
 
-    this.hud.setMessage("WASD moves the character. Mouse rotates the chase camera. Esc unlocks.");
+    this.hud.setMessage("WASD moves. Hold Space to fly. Hold on a target to lift it, release to throw.");
     this.animate();
   }
 
@@ -111,11 +119,12 @@ export class CitySandboxApp {
 
   private readonly animate = (): void => {
     const deltaSeconds = Math.min(this.clock.getDelta(), 0.05);
-    this.carTrafficSystem?.update(deltaSeconds);
     this.controller?.update(deltaSeconds);
     if (this.controller) {
       this.controller.getPosition(this.playerPosition);
     }
+    this.forcePowerController?.update(deltaSeconds);
+    this.carTrafficSystem?.update(deltaSeconds);
     this.npcSystem?.update(deltaSeconds, this.controller ? this.playerPosition : undefined);
     this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
     this.renderer.render(this.scene, this.camera);
@@ -135,6 +144,7 @@ export class CitySandboxApp {
     window.cancelAnimationFrame(this.animationId);
     window.removeEventListener("resize", this.resize);
     window.removeEventListener("beforeunload", this.dispose);
+    this.forcePowerController?.dispose();
     this.controller?.dispose();
     this.npcSystem?.dispose();
     this.carTrafficSystem?.dispose();

@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { cityBounds } from "./cityLayout";
+import type { ForceTarget } from "./forceTarget";
 
 interface TrafficRoute {
   assetId: string;
@@ -14,6 +16,8 @@ interface TrafficCar {
   targetIndex: number;
   wheels: THREE.Object3D[];
   waiting: boolean;
+  forceHeld: boolean;
+  forceVelocity: THREE.Vector3;
 }
 
 export interface TrafficCollider {
@@ -27,6 +31,7 @@ export interface TrafficCollider {
 export interface CarTrafficSystem {
   update(deltaSeconds: number): void;
   getColliders(): TrafficCollider[];
+  getForceTargets(): ForceTarget[];
   dispose(): void;
 }
 
@@ -115,6 +120,8 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
         targetIndex: 1,
         wheels: collectWheels(root),
         waiting: false,
+        forceHeld: false,
+        forceVelocity: new THREE.Vector3(),
       };
     }),
   );
@@ -129,7 +136,10 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
       });
     },
     getColliders() {
-      return cars.map((car) => getTrafficCollider(car));
+      return cars.filter((car) => !car.forceHeld && car.root.position.y < 1.2).map((car) => getTrafficCollider(car));
+    },
+    getForceTargets() {
+      return cars.map((car, index) => createCarForceTarget(car, index));
     },
     dispose() {
       cars.forEach((car) => scene.remove(car.root));
@@ -138,6 +148,16 @@ export async function createCarTrafficSystem(scene: THREE.Scene): Promise<CarTra
 }
 
 function updateCar(car: TrafficCar, deltaSeconds: number, otherColliders: TrafficCollider[]): void {
+  if (car.forceHeld) {
+    car.waiting = true;
+    return;
+  }
+
+  if (car.forceVelocity.lengthSq() > 0.01 || car.root.position.y > 0.21) {
+    updateForceMotion(car, deltaSeconds);
+    return;
+  }
+
   const target = car.route.points[car.targetIndex];
   const dx = target.x - car.root.position.x;
   const dz = target.z - car.root.position.z;
@@ -170,6 +190,45 @@ function updateCar(car: TrafficCar, deltaSeconds: number, otherColliders: Traffi
   car.root.position.z += directionZ * step;
   car.root.rotation.y = yaw;
   spinWheels(car.wheels, step);
+}
+
+function createCarForceTarget(car: TrafficCar, index: number): ForceTarget {
+  return {
+    id: `car-${index}`,
+    type: "car",
+    object: car.root,
+    radius: car.route.length * 0.62,
+    setForceHeld(isHeld: boolean, holdPosition?: THREE.Vector3) {
+      car.forceHeld = isHeld;
+      car.waiting = isHeld;
+      car.forceVelocity.set(0, 0, 0);
+
+      if (holdPosition) {
+        car.root.position.copy(holdPosition);
+      }
+    },
+    applyForceImpulse(velocity: THREE.Vector3) {
+      car.forceHeld = false;
+      car.waiting = true;
+      car.forceVelocity.copy(velocity);
+    },
+  };
+}
+
+function updateForceMotion(car: TrafficCar, deltaSeconds: number): void {
+  car.waiting = true;
+  car.forceVelocity.y -= 24 * deltaSeconds;
+  car.root.position.addScaledVector(car.forceVelocity, deltaSeconds);
+  car.forceVelocity.x *= Math.exp(-deltaSeconds * 0.55);
+  car.forceVelocity.z *= Math.exp(-deltaSeconds * 0.55);
+  car.root.position.x = THREE.MathUtils.clamp(car.root.position.x, cityBounds.minX, cityBounds.maxX);
+  car.root.position.z = THREE.MathUtils.clamp(car.root.position.z, cityBounds.minZ, cityBounds.maxZ);
+
+  if (car.root.position.y <= 0.2) {
+    car.root.position.y = 0.2;
+    car.forceVelocity.set(0, 0, 0);
+    car.waiting = false;
+  }
 }
 
 function getTrafficCollider(
