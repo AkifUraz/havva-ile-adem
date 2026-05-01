@@ -26,6 +26,8 @@ interface NpcWalker {
   idleAction?: THREE.AnimationAction;
   walkAction?: THREE.AnimationAction;
   currentAction?: THREE.AnimationAction;
+  leftArm?: THREE.Object3D;
+  rightArm?: THREE.Object3D;
   config: NpcConfig;
   state: NpcState;
   stateTime: number;
@@ -36,6 +38,7 @@ interface NpcWalker {
   baseRotation: number;
   forceHeld: boolean;
   forceVelocity: THREE.Vector3;
+  forceFlailTime: number;
 }
 
 export interface NpcSystem {
@@ -103,6 +106,8 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         idleAction,
         walkAction,
         currentAction: idleAction,
+        leftArm: root.getObjectByName("arm-left"),
+        rightArm: root.getObjectByName("arm-right"),
         config,
         state: "pausing" as NpcState,
         stateTime: 0.7 + (config.seed % 4) * 0.35,
@@ -112,6 +117,7 @@ export async function createNpcSystem(scene: THREE.Scene): Promise<NpcSystem> {
         baseRotation: 0,
         forceHeld: false,
         forceVelocity: new THREE.Vector3(),
+        forceFlailTime: random01(config.seed) * Math.PI * 2,
       };
     }),
   );
@@ -146,6 +152,7 @@ function updateWalker(walker: NpcWalker, deltaSeconds: number, playerPosition?: 
 
   if (walker.forceHeld) {
     setNpcAnimation(walker, "idle");
+    updateForceFlail(walker, deltaSeconds);
     return;
   }
 
@@ -452,6 +459,7 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
 
 function updateForceMotion(walker: NpcWalker, deltaSeconds: number): void {
   setNpcAnimation(walker, "idle");
+  updateForceFlail(walker, deltaSeconds);
   walker.forceVelocity.y -= 22 * deltaSeconds;
   walker.root.position.addScaledVector(walker.forceVelocity, deltaSeconds);
   keepOutOfBuildings(walker.root.position, npcRadius + 0.7);
@@ -464,4 +472,22 @@ function updateForceMotion(walker: NpcWalker, deltaSeconds: number): void {
     walker.root.position.y = 0.18;
     walker.forceVelocity.set(0, 0, 0);
   }
+}
+
+function updateForceFlail(walker: NpcWalker, deltaSeconds: number): void {
+  if (!walker.leftArm || !walker.rightArm) {
+    return;
+  }
+
+  walker.forceFlailTime += deltaSeconds * 8.5;
+  const leftWave = Math.sin(walker.forceFlailTime) * 0.32;
+  const rightWave = Math.sin(walker.forceFlailTime + Math.PI * 0.72) * 0.32;
+  const shieldPulse = Math.sin(walker.forceFlailTime * 1.7) * 0.16;
+
+  walker.leftArm.rotation.x = -1.25 + leftWave;
+  walker.leftArm.rotation.y = -0.34 + shieldPulse;
+  walker.leftArm.rotation.z = 0.78 + leftWave * 0.45;
+  walker.rightArm.rotation.x = -1.25 + rightWave;
+  walker.rightArm.rotation.y = 0.34 - shieldPulse;
+  walker.rightArm.rotation.z = -0.78 + rightWave * 0.45;
 }
