@@ -38,12 +38,16 @@ export class ThirdPersonController {
   private currentAction?: THREE.AnimationAction;
   private placeholderWalkTime = 0;
   private yaw = 0;
-  private pitch = -0.18;
+  private pitch = -0.22;
   private isLocked = false;
+  private isDraggingLook = false;
+  private activePointerId: number | null = null;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
   private readonly playerRadius = 1.05;
   private readonly speed = 18;
-  private readonly cameraDistance = 17;
-  private readonly cameraHeight = 8.6;
+  private readonly cameraDistance = 7.2;
+  private readonly cameraHeight = 6.7;
 
   constructor(options: ThirdPersonControllerOptions) {
     this.camera = options.camera;
@@ -63,9 +67,12 @@ export class ThirdPersonController {
     void this.loadCharacterModel();
 
     this.lockElement.addEventListener("click", this.requestLock);
-    this.domElement.addEventListener("click", this.requestLock);
     document.addEventListener("pointerlockchange", this.handlePointerLockChange);
     document.addEventListener("mousemove", this.handleMouseMove);
+    this.domElement.addEventListener("pointerdown", this.handlePointerDown);
+    this.domElement.addEventListener("pointermove", this.handlePointerMove);
+    this.domElement.addEventListener("pointerup", this.handlePointerUp);
+    this.domElement.addEventListener("pointercancel", this.handlePointerUp);
     document.addEventListener("keydown", this.handleKeyDown);
     document.addEventListener("keyup", this.handleKeyUp);
   }
@@ -92,9 +99,12 @@ export class ThirdPersonController {
 
   dispose(): void {
     this.lockElement.removeEventListener("click", this.requestLock);
-    this.domElement.removeEventListener("click", this.requestLock);
     document.removeEventListener("pointerlockchange", this.handlePointerLockChange);
     document.removeEventListener("mousemove", this.handleMouseMove);
+    this.domElement.removeEventListener("pointerdown", this.handlePointerDown);
+    this.domElement.removeEventListener("pointermove", this.handlePointerMove);
+    this.domElement.removeEventListener("pointerup", this.handlePointerUp);
+    this.domElement.removeEventListener("pointercancel", this.handlePointerUp);
     document.removeEventListener("keydown", this.handleKeyDown);
     document.removeEventListener("keyup", this.handleKeyUp);
     this.scene.remove(this.character);
@@ -121,9 +131,49 @@ export class ThirdPersonController {
       return;
     }
 
-    this.yaw -= event.movementX * 0.002;
-    this.pitch -= event.movementY * 0.0016;
-    this.pitch = THREE.MathUtils.clamp(this.pitch, -0.62, 0.34);
+    this.rotateLook(event.movementX, event.movementY, 0.002, 0.0016);
+  };
+
+  private readonly handlePointerDown = (event: PointerEvent): void => {
+    if (!event.isPrimary || event.button > 0) {
+      return;
+    }
+
+    this.isDraggingLook = true;
+    this.activePointerId = event.pointerId;
+    this.lastPointerX = event.clientX;
+    this.lastPointerY = event.clientY;
+    this.domElement.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  };
+
+  private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (this.isLocked || !this.isDraggingLook || event.pointerId !== this.activePointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - this.lastPointerX;
+    const deltaY = event.clientY - this.lastPointerY;
+    this.lastPointerX = event.clientX;
+    this.lastPointerY = event.clientY;
+    const sensitivity = event.pointerType === "touch" ? 0.006 : 0.0032;
+    this.rotateLook(deltaX, deltaY, sensitivity, sensitivity * 0.8);
+    event.preventDefault();
+  };
+
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activePointerId) {
+      return;
+    }
+
+    this.isDraggingLook = false;
+    this.activePointerId = null;
+
+    if (this.domElement.hasPointerCapture(event.pointerId)) {
+      this.domElement.releasePointerCapture(event.pointerId);
+    }
+
+    event.preventDefault();
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -172,8 +222,14 @@ export class ThirdPersonController {
     this.camera.position.lerp(this.targetCameraPosition, smoothing);
 
     this.lookTarget.copy(this.character.position);
-    this.lookTarget.y += 4.6;
+    this.lookTarget.y += 4.25;
     this.camera.lookAt(this.lookTarget);
+  }
+
+  private rotateLook(deltaX: number, deltaY: number, yawSensitivity: number, pitchSensitivity: number): void {
+    this.yaw -= deltaX * yawSensitivity;
+    this.pitch -= deltaY * pitchSensitivity;
+    this.pitch = THREE.MathUtils.clamp(this.pitch, -0.72, 0.16);
   }
 
   private async loadCharacterModel(): Promise<void> {
