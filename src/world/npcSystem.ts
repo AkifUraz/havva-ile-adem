@@ -5,6 +5,7 @@ import { keepOutOfBuildings } from "./collisionUtils";
 import { createDebrisFromObject, disposeDebris, type DebrisPiece, updateDebrisPieces } from "./debrisSystem";
 import { resolveAssetUrl } from "./assetResolver";
 import type { ForceTarget } from "./forceTarget";
+import type { PieceImpact } from "./cityWorldSystem";
 
 type NpcState = "walking" | "pausing" | "lookingAround";
 
@@ -51,6 +52,7 @@ export interface NpcSystem {
   update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
   getColliders(): NpcCollider[];
   getForceTargets(): ForceTarget[];
+  applyPieceImpacts(impacts: PieceImpact[]): void;
   setPanic(isPanicking: boolean): void;
   dispose(): void;
 }
@@ -71,6 +73,11 @@ const npcConfigs: NpcConfig[] = [
   { characterId: "h", startNode: "-88:-10", speed: 2.35, seed: 37 },
   { characterId: "n", startNode: "-56:-88", speed: 1.95, seed: 41 },
   { characterId: "q", startNode: "-10:36", speed: 2.7, seed: 53 },
+  { characterId: "b", startNode: "88:36", speed: 2.2, seed: 67 },
+  { characterId: "d", startNode: "-10:-88", speed: 2.05, seed: 79 },
+  { characterId: "h", startNode: "36:88", speed: 2.5, seed: 83 },
+  { characterId: "n", startNode: "-88:36", speed: 1.9, seed: 97 },
+  { characterId: "q", startNode: "88:-10", speed: 2.35, seed: 109 },
 ];
 
 const npcTextureMap: Record<string, string> = {
@@ -152,6 +159,20 @@ export async function createNpcSystem(scene: THREE.Scene, onShatter?: () => void
     },
     getForceTargets() {
       return walkers.filter((walker) => !walker.shattered).map((walker, index) => createNpcForceTarget(walker, index));
+    },
+    applyPieceImpacts(impacts: PieceImpact[]) {
+      impacts.forEach((impact) => {
+        walkers.forEach((walker) => {
+          if (walker.shattered || walker.forceHeld || walker.root.position.y > 2) {
+            return;
+          }
+
+          const distance = Math.hypot(walker.root.position.x - impact.x, walker.root.position.z - impact.z);
+          if (distance < impact.radius + npcRadius + 0.5) {
+            shatterNpc(walker, scene, debrisPieces, impact.velocity, onShatter);
+          }
+        });
+      });
     },
     setPanic(nextIsPanicking: boolean) {
       isPanicking = nextIsPanicking;

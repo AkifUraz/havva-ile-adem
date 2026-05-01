@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-export type ForceTargetType = "npc" | "car";
+export type ForceTargetType = "npc" | "car" | "buildingPiece";
 
 export interface ForceTarget {
   id: string;

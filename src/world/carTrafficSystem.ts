@@ -5,6 +5,7 @@ import { keepOutOfBuildings } from "./collisionUtils";
 import { createDebrisFromObject, disposeDebris, type DebrisPiece, updateDebrisPieces } from "./debrisSystem";
 import { resolveAssetUrl } from "./assetResolver";
 import type { ForceTarget } from "./forceTarget";
+import type { PieceImpact } from "./cityWorldSystem";
 
 interface TrafficRoute {
   assetId: string;
@@ -38,6 +39,7 @@ export interface CarTrafficSystem {
   update(deltaSeconds: number, playerPosition?: THREE.Vector3): void;
   getColliders(): TrafficCollider[];
   getForceTargets(): ForceTarget[];
+  applyPieceImpacts(impacts: PieceImpact[]): void;
   setPanic(isPanicking: boolean): void;
   dispose(): void;
 }
@@ -103,6 +105,30 @@ const trafficRoutes: TrafficRoute[] = [
       { x: 106, z: 41.5 },
     ],
   },
+  {
+    assetId: "sedan",
+    speed: 8.4,
+    length: 10.2,
+    points: [
+      { x: 106, z: -41.5 },
+      { x: 46, z: -41.5 },
+      { x: 0, z: -41.5 },
+      { x: -46, z: -41.5 },
+      { x: -106, z: -41.5 },
+    ],
+  },
+  {
+    assetId: "suv",
+    speed: 7.8,
+    length: 10.6,
+    points: [
+      { x: -4.5, z: -106 },
+      { x: -4.5, z: -46 },
+      { x: -4.5, z: 0 },
+      { x: -4.5, z: 46 },
+      { x: -4.5, z: 106 },
+    ],
+  },
 ];
 
 export async function createCarTrafficSystem(scene: THREE.Scene, onShatter?: () => void): Promise<CarTrafficSystem> {
@@ -153,6 +179,20 @@ export async function createCarTrafficSystem(scene: THREE.Scene, onShatter?: () 
     },
     getForceTargets() {
       return cars.filter((car) => !car.shattered).map((car, index) => createCarForceTarget(car, index));
+    },
+    applyPieceImpacts(impacts: PieceImpact[]) {
+      impacts.forEach((impact) => {
+        cars.forEach((car) => {
+          if (car.shattered || car.forceHeld || car.root.position.y > 2.5) {
+            return;
+          }
+
+          const distance = Math.hypot(car.root.position.x - impact.x, car.root.position.z - impact.z);
+          if (distance < impact.radius + car.route.length * 0.45) {
+            shatterCar(car, scene, debrisPieces, impact.velocity, onShatter);
+          }
+        });
+      });
     },
     setPanic(nextIsPanicking: boolean) {
       isPanicking = nextIsPanicking;

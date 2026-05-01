@@ -26,10 +26,10 @@ export const blockSize = 28;
 export const roadWidth = 18;
 export const blockSpacing = blockSize + roadWidth;
 export const cityBounds: CityBounds = {
-  minX: -100,
-  maxX: 100,
-  minZ: -100,
-  maxZ: 100,
+  minX: -100000,
+  maxX: 100000,
+  minZ: -100000,
+  maxZ: 100000,
 };
 
 const rotations = [0, Math.PI * 0.5, Math.PI, Math.PI * 1.5];
@@ -63,9 +63,21 @@ export function getBuildingHeight(block: CityBlock): number {
 }
 
 export const buildingColliders: ColliderRect[] = cityBlocks.map((block) => ({
-  minX: block.x - blockSize * 0.43,
-  maxX: block.x + blockSize * 0.43,
-  minZ: block.z - blockSize * 0.43,
-  maxZ: block.z + blockSize * 0.43,
+  minX: block.x - blockSize * 0.52,
+  maxX: block.x + blockSize * 0.52,
+  minZ: block.z - blockSize * 0.52,
+  maxZ: block.z + blockSize * 0.52,
   maxY: 0.18 + getBuildingHeight(block),
 }));
+
+export function replaceBuildingColliders(nextColliders: ColliderRect[]): void {
+  buildingColliders.splice(0, buildingColliders.length, ...nextColliders);
+}
+
+export function removeBuildingCollider(colliderToRemove: ColliderRect): void {
+  const index = buildingColliders.indexOf(colliderToRemove);
+
+  if (index >= 0) {
+    buildingColliders.splice(index, 1);
+  }
+}

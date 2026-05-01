@@ -100,6 +100,10 @@ export class ForcePowerController {
     this.domElement.removeEventListener("pointercancel", this.handlePointerUp);
   }
 
+  getAimPoint(target: THREE.Vector2): THREE.Vector2 {
+    return target.copy(this.aimPoint);
+  }
+
   private readonly handlePointerDown = (event: PointerEvent): void => {
     if (!event.isPrimary || event.button > 0) {
       return;

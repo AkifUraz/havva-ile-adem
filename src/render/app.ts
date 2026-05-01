@@ -1,11 +1,15 @@
 import * as THREE from "three";
 import { ForcePowerController } from "../player/forcePowerController";
+import { LaserEyeController } from "../player/laserEyeController";
 import { ThirdPersonController } from "../player/thirdPersonController";
 import type { HudController } from "../ui/hud";
 import { buildingColliders, cityBounds } from "../world/cityLayout";
-import { createCity } from "../world/createCity";
 import type { CarTrafficSystem } from "../world/carTrafficSystem";
 import { createCarTrafficSystem } from "../world/carTrafficSystem";
+import type { CityWorldSystem } from "../world/cityWorldSystem";
+import { createCityWorldSystem } from "../world/cityWorldSystem";
+import type { FeedbackSystem } from "../world/feedbackSystem";
+import { createFeedbackSystem } from "../world/feedbackSystem";
 import type { NpcSystem } from "../world/npcSystem";
 import { createNpcSystem } from "../world/npcSystem";
 
@@ -19,6 +23,9 @@ export class CitySandboxApp {
   private readonly playerPosition = new THREE.Vector3();
   private controller?: ThirdPersonController;
   private forcePowerController?: ForcePowerController;
+  private laserEyeController?: LaserEyeController;
+  private feedbackSystem?: FeedbackSystem;
+  private cityWorldSystem?: CityWorldSystem;
   private npcSystem?: NpcSystem;
   private carTrafficSystem?: CarTrafficSystem;
   private isPanicActive = false;
@@ -39,7 +46,8 @@ export class CitySandboxApp {
     window.addEventListener("resize", this.resize);
     window.addEventListener("beforeunload", this.dispose);
 
-    await createCity(this.scene, this.renderer);
+    this.feedbackSystem = createFeedbackSystem(this.scene);
+    this.cityWorldSystem = await createCityWorldSystem(this.scene, this.renderer, this.feedbackSystem);
     void createCarTrafficSystem(this.scene, this.triggerPanic)
       .then((carTrafficSystem) => {
         if (this.isDisposed) {
@@ -82,13 +90,25 @@ export class CitySandboxApp {
     this.forcePowerController = new ForcePowerController({
       camera: this.camera,
       domElement: this.renderer.domElement,
-      getTargets: () => [...(this.npcSystem?.getForceTargets() ?? []), ...(this.carTrafficSystem?.getForceTargets() ?? [])],
+      getTargets: () => [
+        ...(this.npcSystem?.getForceTargets() ?? []),
+        ...(this.carTrafficSystem?.getForceTargets() ?? []),
+        ...(this.cityWorldSystem?.getForceTargets() ?? []),
+      ],
       setHudProgress: (progress, isLocked) => this.hud.setForceProgress(progress, isLocked),
       setReticleOffset: (offsetX, offsetY) => this.hud.setReticleOffset(offsetX, offsetY),
       setForceActive: (isActive) => this.controller?.setForcePose(isActive),
     });
+    this.laserEyeController = new LaserEyeController({
+      camera: this.camera,
+      scene: this.scene,
+      domElement: this.renderer.domElement,
+      getAimPoint: (target) => this.forcePowerController?.getAimPoint(target) ?? target.set(0, 0),
+      getTargets: () => this.cityWorldSystem?.getLaserTargets() ?? [],
+      feedback: this.feedbackSystem,
+    });
 
-    this.hud.setMessage("Move the hidden mouse to aim. Hold on a target to lift, release to throw. WASD moves, Space flies.");
+    this.hud.setMessage("Move the hidden mouse to aim. Hold to lift, release to throw. Right mouse fires eye laser. WASD moves, Space flies.");
     this.animate();
   }
 
@@ -128,10 +148,18 @@ export class CitySandboxApp {
     if (this.controller) {
       this.controller.getPosition(this.playerPosition);
     }
+    this.cityWorldSystem?.update(this.playerPosition, deltaSeconds);
     this.forcePowerController?.update(deltaSeconds);
+    this.laserEyeController?.update(deltaSeconds);
     this.carTrafficSystem?.update(deltaSeconds, this.controller ? this.playerPosition : undefined);
     this.npcSystem?.update(deltaSeconds, this.controller ? this.playerPosition : undefined);
+    const pieceImpacts = this.cityWorldSystem?.consumePieceImpacts() ?? [];
+    if (pieceImpacts.length > 0) {
+      this.npcSystem?.applyPieceImpacts(pieceImpacts);
+      this.carTrafficSystem?.applyPieceImpacts(pieceImpacts);
+    }
     this.hud.setPosition(this.controller?.getPositionLabel() ?? "loading");
+    this.feedbackSystem?.update(deltaSeconds, this.camera);
     this.renderer.render(this.scene, this.camera);
     this.animationId = window.requestAnimationFrame(this.animate);
   };
@@ -155,10 +183,13 @@ export class CitySandboxApp {
     window.cancelAnimationFrame(this.animationId);
     window.removeEventListener("resize", this.resize);
     window.removeEventListener("beforeunload", this.dispose);
+    this.laserEyeController?.dispose();
     this.forcePowerController?.dispose();
     this.controller?.dispose();
     this.npcSystem?.dispose();
     this.carTrafficSystem?.dispose();
+    this.cityWorldSystem?.dispose();
+    this.feedbackSystem?.dispose();
     this.renderer.dispose();
   };
 }
