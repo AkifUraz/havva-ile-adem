@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { buildingColliders, cityBounds, type ColliderRect } from "./cityLayout";
+import { keepOutOfBuildings } from "./collisionUtils";
 import type { ForceTarget } from "./forceTarget";
 
 type NpcState = "walking" | "pausing" | "lookingAround";
@@ -436,6 +437,7 @@ function createNpcForceTarget(walker: NpcWalker, index: number): ForceTarget {
 
       if (holdPosition) {
         walker.root.position.copy(holdPosition);
+        keepOutOfBuildings(walker.root.position, npcRadius + 0.7);
       }
     },
     applyForceImpulse(velocity: THREE.Vector3) {
@@ -452,6 +454,7 @@ function updateForceMotion(walker: NpcWalker, deltaSeconds: number): void {
   setNpcAnimation(walker, "idle");
   walker.forceVelocity.y -= 22 * deltaSeconds;
   walker.root.position.addScaledVector(walker.forceVelocity, deltaSeconds);
+  keepOutOfBuildings(walker.root.position, npcRadius + 0.7);
   walker.forceVelocity.x *= Math.exp(-deltaSeconds * 0.65);
   walker.forceVelocity.z *= Math.exp(-deltaSeconds * 0.65);
   walker.root.position.x = THREE.MathUtils.clamp(walker.root.position.x, cityBounds.minX, cityBounds.maxX);

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { cityBounds } from "./cityLayout";
+import { keepOutOfBuildings } from "./collisionUtils";
 import type { ForceTarget } from "./forceTarget";
 
 interface TrafficRoute {
@@ -205,6 +206,7 @@ function createCarForceTarget(car: TrafficCar, index: number): ForceTarget {
 
       if (holdPosition) {
         car.root.position.copy(holdPosition);
+        keepOutOfBuildings(car.root.position, car.route.length * 0.32);
       }
     },
     applyForceImpulse(velocity: THREE.Vector3) {
@@ -219,6 +221,7 @@ function updateForceMotion(car: TrafficCar, deltaSeconds: number): void {
   car.waiting = true;
   car.forceVelocity.y -= 24 * deltaSeconds;
   car.root.position.addScaledVector(car.forceVelocity, deltaSeconds);
+  keepOutOfBuildings(car.root.position, car.route.length * 0.32);
   car.forceVelocity.x *= Math.exp(-deltaSeconds * 0.55);
   car.forceVelocity.z *= Math.exp(-deltaSeconds * 0.55);
   car.root.position.x = THREE.MathUtils.clamp(car.root.position.x, cityBounds.minX, cityBounds.maxX);
