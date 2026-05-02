@@ -1,0 +1,30 @@
+{
+  "name": "havva-ile-adem-city-sandbox",
+  "version": "1.0.0",
+  "description": "A small Three.js modern city sandbox built from GLB city assets.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && node scripts/build-single-html.mjs",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AkifUraz/havva-ile-adem.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/AkifUraz/havva-ile-adem/issues"
+  },
+  "homepage": "https://github.com/AkifUraz/havva-ile-adem#readme",
+  "dependencies": {
+    "three": "^0.184.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10"
+  }
+}

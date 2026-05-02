@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.vite/
+.superpowers/
+.tmp-karakter/
+.tmp-cars/
+qa/
+public/assets/city/character-a.glb
+public/Textures/
+*.log
+*.local
